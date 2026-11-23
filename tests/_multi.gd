@@ -164,10 +164,24 @@ func _run() -> void:
 	a.modules["jb"]._on_play()
 	await _wait(0.5)
 	check(b.modules["jb"].playing, "jukebox: Bob's starts too")
-	var t0 := Time.get_ticks_msec()
-	while not a.modules["jb"]._streams.has(0) and Time.get_ticks_msec() - t0 < 30000:
-		await _wait(0.2)
-	check(a.modules["jb"]._streams.has(0), "jukebox: song rendered in %.1f s" % ((Time.get_ticks_msec() - t0) / 1000.0))
+	check(a.modules["jb"]._streams.get(0) is AudioStreamMP3, "jukebox: bundled song loaded")
+	a.modules["jb"]._on_song(3)
+	await _wait(0.5)
+	check(b.modules["jb"].song == 3 and b.modules["jb"].playing, "jukebox: picking a song plays it for Bob too")
+
+	# Gym: scoreboard and gravity are shared.
+	a.modules["gy"]._on_points(0, 3)
+	a.modules["gy"]._on_planet(2)
+	await _wait(0.5)
+	check(b.modules["gy"].home == 3, "gym: Bob's scoreboard shows HOME 3")
+	check(b.modules["gy"].planet == 2 and is_equal_approx(b.modules["bb"].balls[0].gravity_scale, 1.62 / 9.81), "gym: Moon gravity on Bob's balls")
+
+	# Chairs: a moved chair moves for Bob.
+	var ch: Node = a.modules["fu"].chairs[0]
+	ch.position = Vector3(-12.0, 0, -2.5)
+	a.modules["fu"]._send(ch, false)
+	await _wait(0.8)
+	check(b.modules["fu"].chairs[0].position.distance_to(Vector3(-12.0, 0, -2.5)) < 0.05, "chairs: Bob sees the chair moved")
 
 	# Props: index lookups by kind.
 	var apr: Node = a.modules["pr"]

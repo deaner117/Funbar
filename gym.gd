@@ -373,13 +373,13 @@ func handle(msg: Dictionary, _from: int) -> void:
 		"gy_horn":
 			_buzzer.play()
 		"gy_full":
-			handle(msg.get("s", {}), _from)
+			handle(msg.get("sc", {}), _from)
 			planet = clampi(int(msg.get("g", 0)), 0, PLANETS.size() - 1)
 			_apply_gravity()
 
 
 func full_state() -> Dictionary:
-	return {"t": "gy_full", "s": _score_msg(), "g": planet}
+	return {"t": "gy_full", "sc": _score_msg(), "g": planet}
 
 
 func on_identity_changed(_old_id: int, _new_id: int) -> void:
