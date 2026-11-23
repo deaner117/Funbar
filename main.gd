@@ -849,6 +849,9 @@ func _take_shots(dir: String) -> void:
 		["art_west", Vector3(-4.0, 0, 0.0), PI / 2, 0.05],
 		["art_east", Vector3(4.0, 0, 0.0), -PI / 2, 0.05],
 		["card_table", Vector3(-11.5, 0, -1.9), 0.0, -0.45],
+		["hearth", Vector3(-18.3, 0, 0.0), PI / 2, -0.25],
+		["lounge_table", Vector3(-16.4, 0, 1.2), PI / 2 + 0.7, -0.5],
+		["sofa_close", Vector3(0, 0, -0.4), PI, -0.35],
 		["art_lounge", Vector3(-9.6, 0, 0.0), -PI / 2, 0.08],
 		["jukebox", Vector3(-11.0, 0, 5.1), PI, -0.25],
 		["jukebox_far", Vector3(-11.5, 0, 3.3), PI - 0.15, -0.1],
@@ -902,6 +905,7 @@ func _take_shots(dir: String) -> void:
 			await get_tree().process_frame
 		var img := get_viewport().get_texture().get_image()
 		img.save_png("%s/%s.png" % [dir, shot])
+		print("shot %s: %d draw calls" % [shot, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)])
 		menu.close()
 		for hm in hand_demo:
 			hm.queue_free()

@@ -5,11 +5,12 @@ history, the gotchas and what's next. This file is the short version.
 
 - **What**: a multiplayer social VR mansion for Meta Quest 3. Friends join with a room code and
   get voice chat, avatars with realistic hands, games (air hockey, Connect Four, basketball,
-  cornhole) and hangout props (a fire to roast marshmallows on, a BBQ, a pool, a jukebox,
-  speakers, a throwable cake).
+  cornhole, and an arcade with skee-ball, hoops, a shooting gallery, pinball, a maze game and a
+  racer) and hangout props (a fire to roast marshmallows on, a BBQ, a pool, a jukebox, speakers,
+  a throwable cake), plus a bartender who serves drinks.
 - **Stack**: Godot 4.7.2 (GDScript), OpenXR plus the Meta vendors plugin, mobile renderer, Jolt.
-  Everything is generated in code; there are no art assets. The relay is a Cloudflare Worker in
-  `server/`.
+  Everything is generated in code except the bartender (a Rocketbox model in `models/`, MIT,
+  see CREDITS.md). The relay is a Cloudflare Worker in `server/`.
 - **Names**: the app is "Sam and Dean Worldwide", but the folder, scripts and Android package
   are still `hangout-mansion` / `com.homebrew.hangoutmansion` on purpose.
 
@@ -20,7 +21,7 @@ history, the gotchas and what's next. This file is the short version.
   "Stats:" line every 2 s.
 - Desktop screenshots of every area:
   `tools\Godot_v4.7.2-stable_win64_console.exe --xr-mode off --path . --resolution 1280x720 -- --solo --shots=<abs dir>`
-- Multiplayer test (expect `42 passed, 0 failed`): start `npx wrangler dev --port 8787` in
+- Multiplayer test (expect `58 passed, 0 failed`): start `npx wrangler dev --port 8787` in
   `server/`, then
   `tools\Godot_v4.7.2-stable_win64_console.exe --headless --xr-mode off --path . -s tests/_multi.gd`
 - `tools/` (the Godot exes) isn't in git. Setup is in docs/HANDOFF.md section 3.

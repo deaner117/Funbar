@@ -315,6 +315,25 @@ On release the throw velocity is the hand's smoothed velocity × 1.05.
    - It first ran at 73 fps on the headset (488 draw calls). Static-mesh merging restored
      90 fps (56–124 draw calls).
    - The code was pushed to GitHub at https://github.com/deaner117/Funbar (branch `main`).
+4. **Second feedback round (2026-11-22/23, branch `claude-updates-nov22-2026`)**. The owner
+   asked for a gym scoreboard they can run themselves and a gravity panel, unique
+   optical-illusion art, a detailed jukebox with real (licensed) music, lounge chairs that can
+   be pulled out, more realistic Connect Four, "the dopest arcade" (at minimum real pinball and
+   a Pac-Man-style game, plus skee-ball, a basketball shooter, a shooting gallery and racing), a
+   physically attractive female bartender serving behind the bar, and more definition in the
+   furniture, decor and lounge fire everywhere. What was built:
+   - Gym scoreboard and gravity panel, `illusions.gd` art, the bubble jukebox with CC-BY music
+     (CREDITS.md), movable chairs (`furniture.gd`), and a new Connect Four.
+   - The game room became an arcade hall with original games (no copyrighted names, characters
+     or mazes): `skeeball.gd`, `hoops.gd`, `gallery.gd`, `pinball.gd`, `maze.gd`, `racer.gd`,
+     sharing `arcade_kit.gd` (cabinet builder, CRT screen shader, batched 2D drawing, sounds).
+     Cabinet games set `main.controls_captured` so the sticks drive the game instead of walking.
+   - `bartender.gd`: a rigged Rocketbox model (the only imported asset) posed in code. She
+     breathes, looks at people, wipes the bar, greets people, and serves cocktail props.
+   - Furniture pass: Chesterfield sofas and wingback armchairs, chandelier crystals, a marble
+     fireplace with andirons, tools and a log basket, and decor on the lounge coffee table.
+   - The test grew to 58 checks, all passing. Desktop draw calls: about 800 in the arcade view,
+     about 510 in the hall. **Not yet checked on the headset** (it was offline).
 
 ---
 
@@ -344,6 +363,13 @@ On release the throw velocity is the hand's smoothed velocity × 1.05.
   `Node3D`) works dynamically. Avoid naming parameters `scale` and similar in Node3D scripts,
   because they shadow properties.
 - **Labels** are unshaded and single-sided. Face them (`yaw`) toward where people stand.
+- **Arcade**: each machine merges its own static meshes with `AK.merge()` and hides small
+  details past 7 m (`AK.cull_small`). Nodes that move (flippers, the steering wheel, buttons
+  with `press`) must be skipped. MultiMeshes are skipped by `cull_small` because their AABB is
+  zero at build time. `--only=a,b` with `--shots` renders just the named shots, and each shot
+  prints its draw-call count.
+- **Bartender model**: the FBX import warns about missing TGA textures. That's expected:
+  materials are assigned in `bartender.gd` from the 1024 px PNGs.
 - **Props state**: when a prop is restored or teleported, reset transient physics state (e.g.
   `last_speed`), or a hidden cake splats again the moment it reappears.
 

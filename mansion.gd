@@ -261,35 +261,76 @@ func _fabric(color: Color) -> Material:
 	return Kit.tmat(color, "fabric", 6.0, 0.95)
 
 
-## Sofa facing +z (rotated by yaw), seat 0.45 high: rounded frame on wooden legs, plump
-## seat and back cushions, and throw pillows on the longer ones.
-func _sofa(pos: Vector3, yaw: float, color: Color, length := 2.1, pillow := Color(0, 0, 0, 0)) -> void:
+## A Chesterfield-style sofa facing +z turned by yaw: a wooden plinth on turned bun feet,
+## rolled arms with brass nailheads down their fronts, a button-tufted back with a rolled top,
+## piped seat cushions and throw pillows.
+## wing makes an armchair with a tall wingback.
+func _sofa(pos: Vector3, yaw: float, color: Color, length := 2.1, pillow := Color(0, 0, 0, 0), wing := false) -> void:
 	var p := _pivot(pos, yaw)
 	var frame := _fabric(color)
-	var cushion := _fabric(color.lightened(0.1))
-	var legs := _wood(Color("2a1a10"), 0.4)
-	Kit.add_rbox(p, Vector3(length, 0.22, 0.86), Vector3(0, 0.21, 0), frame, 0.05)
-	Kit.add_rbox(p, Vector3(length, 0.56, 0.2), Vector3(0, 0.56, -0.33), frame, 0.08, 0, Vector3(-0.06, 0, 0))
-	for side: float in [-1.0, 1.0]:
-		Kit.add_rbox(p, Vector3(0.18, 0.32, 0.86), Vector3(side * (length / 2.0 - 0.09), 0.46, 0), frame, 0.07)
-		for sz: float in [-0.36, 0.36]:
-			Kit.add_cylinder(p, 0.024, 0.1, Vector3(side * (length / 2.0 - 0.08), 0.05, sz), legs, 0, 0.018, 8)
-	var seats := 1 if length < 1.4 else (3 if length > 2.3 else 2)
-	var seat_w := (length - 0.36) / seats
+	var cushion := _fabric(color.lightened(0.08))
+	var deep := _fabric(color.darkened(0.35))
+	var wood := _wood(Color("2a1a10"), 0.35)
+	var brass := Kit.mat(Color(0.8, 0.62, 0.3), 0.35, 0.7)
+	var depth := 0.9
+	var arm_w := 0.2
+	var inner := length - 2.0 * arm_w
+	# Plinth and feet.
+	Kit.add_rbox(p, Vector3(length - 0.02, 0.07, depth - 0.02), Vector3(0, 0.115, 0), wood, 0.02)
+	var foot := PackedVector2Array([Vector2(0.0, 0.0), Vector2(0.03, 0.0), Vector2(0.042, 0.025), Vector2(0.04, 0.05),
+		Vector2(0.03, 0.07), Vector2(0.034, 0.08), Vector2(0.0, 0.08)])
+	for sx: float in [-1.0, 1.0]:
+		for sz: float in [-1.0, 1.0]:
+			Kit.add_lathe(p, foot, Vector3(sx * (length / 2.0 - 0.08), 0.0, sz * (depth / 2.0 - 0.08)), wood, 12)
+	# Seat base (deck) and the back with tufting.
+	Kit.add_rbox(p, Vector3(length - 0.04, 0.2, depth - 0.04), Vector3(0, 0.25, 0.0), frame, 0.05)
+	var back_h := 0.95 if wing else 0.52
+	var back_y := 0.35 + back_h / 2.0
+	Kit.add_rbox(p, Vector3(inner + 0.02, back_h, 0.2), Vector3(0, back_y, -depth / 2.0 + 0.12), frame, 0.07, 0, Vector3(-0.07, 0, 0))
+	Kit.add_cylinder(p, 0.085, inner + 0.08, Vector3(0, 0.35 + back_h + 0.0, -depth / 2.0 + 0.1), frame, 0, -1.0, 16, Vector3(0, 0, PI / 2))
+	var rows := 3 if wing else 2
+	var cols := maxi(2, int(inner / 0.17))
+	for r in rows:
+		for c in cols + (r % 2):
+			var x := -inner / 2.0 + (c + (0.5 if r % 2 == 0 else 0.0) + 0.0) * inner / cols
+			if absf(x) > inner / 2.0 - 0.04:
+				continue
+			var y := 0.62 + r * 0.15
+			var z := -depth / 2.0 + 0.22 + (y - back_y) * -0.07
+			Kit.add_sphere(p, 0.013, Vector3(x, y, z + 0.005), deep, 0, 6)
+			# Pleat dimples between buttons.
+			Kit.add_box(p, Vector3(0.006, 0.08, 0.006), Vector3(x, y - 0.075, z), deep, 0, Vector3(-0.07, 0, 0.6 if c % 2 == 0 else -0.6))
+	if wing:
+		for sx: float in [-1.0, 1.0]:
+			Kit.add_rbox(p, Vector3(0.12, 0.5, 0.34), Vector3(sx * (inner / 2.0 + 0.02), 0.95, -depth / 2.0 + 0.27), frame, 0.06, 0,
+				Vector3(0, sx * -0.25, 0))
+	# Rolled arms.
+	for sx: float in [-1.0, 1.0]:
+		var ax := sx * (length / 2.0 - arm_w / 2.0)
+		Kit.add_rbox(p, Vector3(arm_w - 0.02, 0.34, depth - 0.06), Vector3(ax, 0.48, 0.0), frame, 0.05)
+		Kit.add_cylinder(p, arm_w / 2.0 + 0.02, depth - 0.04, Vector3(ax + sx * 0.015, 0.66, 0.0), frame, 0, -1.0, 16, Vector3(PI / 2, 0, 0))
+		Kit.add_cylinder(p, arm_w / 2.0 + 0.005, 0.02, Vector3(ax + sx * 0.015, 0.66, depth / 2.0 - 0.01), _fabric(color.darkened(0.12)), 0, -1.0, 16, Vector3(PI / 2, 0, 0))
+		for k in 7:
+			Kit.add_sphere(p, 0.008, Vector3(ax + sx * 0.015, 0.36 + k * 0.045, depth / 2.0 - 0.012), brass, 0, 6)
+	# Seat cushions with piping along the front.
+	var seats := 1 if inner < 1.0 else (3 if inner > 1.9 else 2)
+	var seat_w := inner / seats
 	for i in seats:
-		var x := -(length - 0.36) / 2.0 + seat_w * (i + 0.5)
-		Kit.add_rbox(p, Vector3(seat_w - 0.02, 0.14, 0.64), Vector3(x, 0.39, 0.08), cushion, 0.05)
-		Kit.add_rbox(p, Vector3(seat_w - 0.03, 0.4, 0.14), Vector3(x, 0.66, -0.19), cushion, 0.06, 0, Vector3(-0.16, 0, 0))
+		var x := -inner / 2.0 + seat_w * (i + 0.5)
+		Kit.add_rbox(p, Vector3(seat_w - 0.015, 0.14, depth - 0.24), Vector3(x, 0.42, 0.08), cushion, 0.055)
+		Kit.add_cylinder(p, 0.008, seat_w - 0.06, Vector3(x, 0.49, depth / 2.0 - 0.04), deep, 0, -1.0, 6, Vector3(0, 0, PI / 2))
+	# Throw pillows on the longer ones.
 	if length >= 1.6:
 		var pc := pillow if pillow.a > 0.0 else color.lightened(0.45)
 		for side: float in [-1.0, 1.0]:
-			Kit.add_rbox(p, Vector3(0.36, 0.34, 0.1), Vector3(side * (length / 2.0 - 0.36), 0.64, -0.06), _fabric(pc), 0.045, 0,
-				Vector3(-0.3, side * 0.35, side * 0.12))
-	_collider(p, Vector3(length, 0.45, 0.9), Vector3(0, 0.22, 0))
+			Kit.add_rbox(p, Vector3(0.38, 0.36, 0.12), Vector3(side * (inner / 2.0 - 0.2), 0.66, -0.2), _fabric(pc), 0.05, 0,
+				Vector3(-0.3, side * 0.3, side * 0.1))
+			Kit.add_sphere(p, 0.018, Vector3(side * (inner / 2.0 - 0.2), 0.68, -0.13), _fabric(pc.darkened(0.25)), 0, 8)
+	_collider(p, Vector3(length, 0.5, depth), Vector3(0, 0.25, 0))
 
 
 func _armchair(pos: Vector3, yaw: float, color: Color) -> void:
-	_sofa(pos, yaw, color, 1.0)
+	_sofa(pos, yaw, color, 1.0, Color(0, 0, 0, 0), true)
 
 
 ## Table with a rounded wooden top, an apron and tapered legs.
@@ -505,6 +546,34 @@ func _grand_hall() -> void:
 	for b in bulbs:
 		halos.append(Transform3D(Basis.IDENTITY, b.origin))
 	Kit.add_multimesh(self, Kit.sphere_mesh(0.14, 12), halos, Kit.halo_mat(Color(1.0, 0.75, 0.4), 0.6))
+	# Crystals: garlands of beads swagged between the arms and an inner ring, a prism drop
+	# under every arm, and a tiered cascade with a crystal ball at the bottom.
+	var beads: Array[Transform3D] = []
+	var drops: Array[Transform3D] = []
+	for i in 8:
+		var a0 := TAU * i / 8.0
+		var a1 := TAU * (i + 1) / 8.0
+		var t0 := Vector3(cos(a0) * 0.7, 4.8, sin(a0) * 0.7)
+		var t1 := Vector3(cos(a1) * 0.7, 4.8, sin(a1) * 0.7)
+		for q: Vector3 in Kit.catenary(t0, t1, 0.16, 11):
+			beads.append(Transform3D(Basis.IDENTITY, q))
+		for q: Vector3 in Kit.catenary(Vector3(0, 4.66, 0), t0 - Vector3(0, 0.1, 0), 0.12, 7):
+			beads.append(Transform3D(Basis.IDENTITY, q))
+		for k in 3:
+			drops.append(Transform3D(Basis.IDENTITY.scaled(Vector3(0.022, 0.06, 0.022)), t0 - Vector3(0, 0.16 + k * 0.1, 0)))
+	for tier in 3:
+		var r := 0.28 - tier * 0.08
+		var y := 4.45 - tier * 0.16
+		for k in 12 - tier * 3:
+			var a := TAU * k / (12 - tier * 3) + tier * 0.3
+			drops.append(Transform3D(Basis.IDENTITY.scaled(Vector3(0.02, 0.07, 0.02)), Vector3(cos(a) * r, y, sin(a) * r)))
+			for j in 3:
+				beads.append(Transform3D(Basis.IDENTITY, Vector3(cos(a) * r, y + 0.07 + j * 0.035, sin(a) * r)))
+	var crystal := Kit.mat(Color(0.93, 0.96, 1.0), 0.05, 0.5, 0.25)
+	Kit.add_multimesh(self, Kit.sphere_mesh(0.012, 6), beads, crystal)
+	Kit.add_multimesh(self, Kit.sphere_mesh(1.0, 4), drops, crystal)
+	Kit.add_sphere(self, 0.06, Vector3(0, 3.95, 0), crystal, 0, 12)
+	Kit.add_cylinder(self, 0.012, 0.1, Vector3(0, 4.05, 0), gold, 0, -1.0, 6)
 	Kit.omni(self, Vector3(0, 4.4, 0), Color(1.0, 0.9, 0.75), 2.2, 13.0)
 	Kit.omni(self, Vector3(0, 2.6, 5.0), Color(1.0, 0.92, 0.8), 0.7, 7.0)
 	# Plants, paintings and windows.
@@ -775,35 +844,83 @@ func _lounge() -> void:
 	var ceiling := Kit.mat(Color("3a2a20"), 0.9)
 	var panel := Kit.tmat(Color("4a2f1f"), "planks", 1.0, 0.5)
 	_room(-21, -7, -7, 7, 4.0, floor_m, wall, ceiling, _wood(Color("2e1c12"), 0.4), {"e": 0.0}, panel)
-	# Fireplace on the west wall: a stone surround with a real opening, a sooty firebox behind,
-	# a hearth in front and a wooden mantel. The fire burns inside.
-	var stone := Kit.tmat(Color("8d877e"), "pavers", 1.2, 0.95)
+	# Fireplace on the west wall: a plaster chimney breast to the ceiling, a carved marble
+	# surround (pilasters with capitals, a frieze and a moulded mantel shelf), a sooty brick
+	# firebox, a marble hearth, iron andirons, a tool set and a basket of logs.
+	var plaster := Kit.tmat(Color("8a6352"), "plaster", 0.5, 0.9)
+	var marble := Kit.tmat(Color("e9e3d8"), "tiles", 0.12, 0.25)
+	var marble_dk := Kit.tmat(Color("cfc6b6"), "tiles", 0.12, 0.3)
 	var soot := Kit.tmat(Color(0.12, 0.1, 0.09), "bricks", 1.5, 0.95)
-	var face_x := -20.25   # front face of the surround
-	Kit.add_rbox(self, Vector3(0.55, 2.4, 0.75), Vector3(face_x - 0.275, 1.2, -1.05), stone, 0.03, Kit.LAYER_FURNITURE)
-	Kit.add_rbox(self, Vector3(0.55, 2.4, 0.75), Vector3(face_x - 0.275, 1.2, 1.05), stone, 0.03, Kit.LAYER_FURNITURE)
-	Kit.add_rbox(self, Vector3(0.55, 1.4, 1.4), Vector3(face_x - 0.275, 1.7, 0), stone, 0.03, Kit.LAYER_FURNITURE)
+	var iron := Kit.mat(Color(0.08, 0.08, 0.09), 0.6, 0.5)
+	var brass := Kit.mat(Color(0.75, 0.6, 0.3), 0.3, 0.85)
+	var face_x := -20.25   # front face of the chimney breast
+	Kit.add_box(self, Vector3(0.55, 4.0, 0.75), Vector3(face_x - 0.275, 2.0, -1.05), plaster, Kit.LAYER_FURNITURE)
+	Kit.add_box(self, Vector3(0.55, 4.0, 0.75), Vector3(face_x - 0.275, 2.0, 1.05), plaster, Kit.LAYER_FURNITURE)
+	Kit.add_box(self, Vector3(0.55, 3.0, 1.4), Vector3(face_x - 0.275, 2.5, 0), plaster, Kit.LAYER_FURNITURE)
 	Kit.add_box(self, Vector3(0.04, 1.0, 1.4), Vector3(-20.78, 0.5, 0), soot)
 	for sz: float in [-0.68, 0.68]:
 		Kit.add_box(self, Vector3(0.55, 1.0, 0.04), Vector3(face_x - 0.275, 0.5, sz), soot)
 	Kit.add_box(self, Vector3(0.6, 0.04, 1.4), Vector3(face_x - 0.27, 0.02, 0), Kit.mat(Color(0.08, 0.07, 0.06)), Kit.LAYER_FURNITURE)
-	Kit.add_rbox(self, Vector3(0.75, 0.08, 2.4), Vector3(face_x + 0.32, 0.04, 0), stone, 0.02, Kit.LAYER_FURNITURE)
+	# Marble surround.
+	for sz: float in [-1.0, 1.0]:
+		var z := sz * 0.84
+		Kit.add_box(self, Vector3(0.1, 0.12, 0.3), Vector3(face_x + 0.05, 0.06, z), marble_dk)
+		Kit.add_box(self, Vector3(0.07, 1.0, 0.22), Vector3(face_x + 0.035, 0.6, z), marble)
+		for k in 3:
+			Kit.add_box(self, Vector3(0.012, 0.86, 0.025), Vector3(face_x + 0.072, 0.6, z - 0.06 + k * 0.06), marble_dk)
+		Kit.add_rbox(self, Vector3(0.12, 0.16, 0.28), Vector3(face_x + 0.06, 1.18, z), marble_dk, 0.02)
+		Kit.add_sphere(self, 0.05, Vector3(face_x + 0.1, 1.18, z), marble, 0, 10)
+	Kit.add_box(self, Vector3(0.07, 0.26, 1.46), Vector3(face_x + 0.035, 1.13, 0), marble)
+	Kit.add_rbox(self, Vector3(0.03, 0.12, 0.44), Vector3(face_x + 0.08, 1.13, 0), marble_dk, 0.02)
+	Kit.add_box(self, Vector3(0.025, 0.02, 1.46), Vector3(face_x + 0.075, 1.0, 0), marble_dk)
+	Kit.add_rbox(self, Vector3(0.26, 0.05, 2.1), Vector3(face_x + 0.1, 1.29, 0), marble_dk, 0.015)
+	Kit.add_rbox(self, Vector3(0.34, 0.06, 2.24), Vector3(face_x + 0.12, 1.345, 0), marble, 0.02, Kit.LAYER_FURNITURE)
+	# Hearth.
+	Kit.add_rbox(self, Vector3(0.8, 0.06, 2.3), Vector3(face_x + 0.36, 0.03, 0), marble, 0.015, Kit.LAYER_FURNITURE)
+	Kit.add_box(self, Vector3(0.6, 0.002, 1.4), Vector3(face_x + 0.32, 0.061, 0), marble_dk)
+	# Andirons in front of the logs, and an iron grate.
+	for sz: float in [-0.32, 0.32]:
+		Kit.add_box(self, Vector3(0.5, 0.03, 0.03), Vector3(face_x - 0.28, 0.06, sz), iron)
+		Kit.add_cylinder(self, 0.02, 0.3, Vector3(face_x - 0.04, 0.17, sz), iron, 0, 0.012, 8)
+		Kit.add_sphere(self, 0.04, Vector3(face_x - 0.04, 0.35, sz), brass, 0, 12)
+		Kit.add_cylinder(self, 0.03, 0.04, Vector3(face_x - 0.04, 0.02, sz), iron, 0, 0.04, 8)
+	for k in 5:
+		Kit.add_box(self, Vector3(0.03, 0.03, 0.6), Vector3(face_x - 0.45 + k * 0.08, 0.09, 0), iron)
+	# Fire tools on a stand at the right, a log basket at the left.
+	var tp := Vector3(face_x + 0.35, 0, 1.4)
+	Kit.add_cylinder(self, 0.12, 0.02, tp + Vector3(0, 0.07, 0), iron, 0, -1.0, 16)
+	Kit.add_cylinder(self, 0.012, 0.75, tp + Vector3(0, 0.45, 0), iron, 0, -1.0, 8)
+	Kit.add_sphere(self, 0.03, tp + Vector3(0, 0.84, 0), brass, 0, 10)
+	for k in 3:
+		var a := TAU * k / 3.0
+		var off := Vector3(cos(a) * 0.06, 0, sin(a) * 0.06)
+		Kit.add_cylinder(self, 0.008, 0.66, tp + off + Vector3(0, 0.42, 0), iron, 0, -1.0, 6)
+		Kit.add_sphere(self, 0.018, tp + off + Vector3(0, 0.76, 0), brass, 0, 8)
+	Kit.add_box(self, Vector3(0.1, 0.12, 0.02), tp + Vector3(cos(0.0) * 0.06, 0.13, 0), iron)
+	Kit.add_box(self, Vector3(0.08, 0.1, 0.05), tp + Vector3(cos(TAU / 3.0) * 0.06, 0.12, sin(TAU / 3.0) * 0.06), Kit.mat(Color(0.25, 0.2, 0.14), 0.9))
+	var bp := Vector3(face_x + 0.4, 0, -1.45)
+	Kit.add_cylinder(self, 0.24, 0.32, bp + Vector3(0, 0.16, 0), Kit.tmat(Color(0.55, 0.42, 0.28), "fabric", 10.0, 0.9), Kit.LAYER_FURNITURE, 0.28, 16)
+	var bark := Kit.tmat(Color(0.32, 0.22, 0.14), "grain", 6.0, 0.95)
+	for k in 6:
+		var a := TAU * k / 6.0
+		Kit.add_cylinder(self, 0.045, 0.6, bp + Vector3(cos(a) * 0.12, 0.38 + (k % 2) * 0.05, sin(a) * 0.1), bark, 0, -1.0, 8, Vector3(PI / 2, a * 0.3, 0.15))
 	var mantel := _wood(Color("3b2618"), 0.35)
-	Kit.add_rbox(self, Vector3(0.36, 0.12, 2.9), Vector3(face_x + 0.05, 2.46, 0), mantel, 0.025)
-	Kit.add_rbox(self, Vector3(0.24, 0.06, 2.7), Vector3(face_x + 0.02, 2.37, 0), mantel, 0.02)
-	var brass := Kit.mat(Color(0.75, 0.6, 0.3), 0.3, 0.85)
-	for sz: float in [-1.15, 1.15]:
-		Kit.add_cylinder(self, 0.045, 0.03, Vector3(face_x + 0.05, 2.535, sz), brass, 0, 0.035, 12)
-		Kit.add_cylinder(self, 0.014, 0.2, Vector3(face_x + 0.05, 2.65, sz), brass, 0, 0.012, 8)
-		Kit.add_cylinder(self, 0.022, 0.16, Vector3(face_x + 0.05, 2.83, sz), Kit.mat(Color(0.97, 0.95, 0.9)), 0, -1.0, 10)
-		Kit.add_sphere(self, 0.011, Vector3(face_x + 0.05, 2.93, sz), Kit.mat(Color(1.0, 0.8, 0.4), 0.9, 0.0, 4.0), 0, 6)
-	# Mantel clock.
-	Kit.add_rbox(self, Vector3(0.12, 0.24, 0.3), Vector3(face_x + 0.05, 2.64, 0), mantel, 0.04)
-	Kit.add_cylinder(self, 0.09, 0.01, Vector3(face_x + 0.115, 2.66, 0), Kit.mat(Color(0.96, 0.94, 0.88)), 0, -1.0, 16, Vector3(0, 0, PI / 2))
-	var fire := Fire.new(0.75, 2.0, false)
-	fire.position = Vector3(face_x - 0.3, 0.04, 0)
+	var top_y := 1.375
+	for sz: float in [-0.95, 0.95]:
+		Kit.add_cylinder(self, 0.045, 0.03, Vector3(face_x + 0.12, top_y + 0.015, sz), brass, 0, 0.035, 12)
+		Kit.add_cylinder(self, 0.014, 0.2, Vector3(face_x + 0.12, top_y + 0.13, sz), brass, 0, 0.012, 8)
+		Kit.add_cylinder(self, 0.022, 0.16, Vector3(face_x + 0.12, top_y + 0.31, sz), Kit.mat(Color(0.97, 0.95, 0.9)), 0, -1.0, 10)
+		Kit.add_sphere(self, 0.011, Vector3(face_x + 0.12, top_y + 0.41, sz), Kit.mat(Color(1.0, 0.8, 0.4), 0.9, 0.0, 4.0), 0, 6)
+	# Mantel clock, and a pair of little vases.
+	Kit.add_rbox(self, Vector3(0.12, 0.24, 0.3), Vector3(face_x + 0.1, top_y + 0.12, 0), mantel, 0.04)
+	Kit.add_cylinder(self, 0.09, 0.01, Vector3(face_x + 0.165, top_y + 0.14, 0), Kit.mat(Color(0.96, 0.94, 0.88)), 0, -1.0, 16, Vector3(0, 0, PI / 2))
+	for sz: float in [-0.5, 0.5]:
+		Kit.add_lathe(self, PackedVector2Array([Vector2(0, 0), Vector2(0.03, 0), Vector2(0.05, 0.05), Vector2(0.045, 0.11), Vector2(0.02, 0.15),
+			Vector2(0.03, 0.18), Vector2(0, 0.18)]), Vector3(face_x + 0.1, top_y, sz), Kit.mat(Color(0.15, 0.3, 0.45), 0.2, 0.1), 14)
+	var fire := Fire.new(0.95, 2.4, false)
+	fire.position = Vector3(face_x - 0.3, 0.06, 0)
 	add_child(fire)
-	_painting(Vector3(-20.77, 3.3, 0), PI / 2, Vector2(1.2, 0.8), 13, false)
+	_painting(Vector3(-20.21, 2.35, 0), PI / 2, Vector2(1.3, 0.9), 13, false)
 	_painting(Vector3(-18.6, 2.35, 6.77), PI, Vector2(1.5, 1.1), 9)
 	_painting(Vector3(-7.23, 2.35, -4.0), -PI / 2, Vector2(1.3, 1.3), 7)
 	_painting(Vector3(-7.23, 2.35, 4.0), -PI / 2, Vector2(1.6, 1.1), 4)
@@ -814,6 +931,54 @@ func _lounge() -> void:
 	_sofa(Vector3(-17.6, 0, -2.3), 0.0, Color("8c2f39"), 2.0, Color("e0c27a"))
 	_sofa(Vector3(-17.6, 0, 2.3), PI, Color("8c2f39"), 2.0, Color("e0c27a"))
 	_table(Vector3(-17.6, 0, 0), Vector3(1.2, 0.4, 1.4), mantel, mantel)
+	# On the coffee table: a stack of books, a tray of candles, a vase of flowers.
+	var ct := Vector3(-17.6, 0.4, 0)
+	for k in 3:
+		Kit.add_rbox(self, Vector3(0.26 - k * 0.03, 0.04, 0.19 - k * 0.02), ct + Vector3(0.2, 0.02 + k * 0.04, -0.35), _fabric([Color("7a2030"),
+			Color("1e3d5c"), Color("c9a65a")][k]), 0.005, 0, Vector3(0, k * 0.25, 0))
+	Kit.add_rbox(self, Vector3(0.36, 0.02, 0.2), ct + Vector3(-0.15, 0.01, 0.3), brass, 0.008)
+	for k in 3:
+		Kit.add_cylinder(self, 0.03, 0.08 + k * 0.04, ct + Vector3(-0.27 + k * 0.12, 0.06 + k * 0.02, 0.3), Kit.mat(Color(0.96, 0.93, 0.86)), 0, -1.0, 10)
+		Kit.add_sphere(self, 0.008, ct + Vector3(-0.27 + k * 0.12, 0.11 + k * 0.04, 0.3), Kit.mat(Color(1.0, 0.8, 0.4), 0.9, 0.0, 4.0), 0, 6)
+	Kit.add_lathe(self, PackedVector2Array([Vector2(0, 0), Vector2(0.05, 0), Vector2(0.07, 0.06), Vector2(0.055, 0.17), Vector2(0.03, 0.22),
+		Vector2(0.04, 0.25), Vector2(0, 0.25)]), ct + Vector3(0.25, 0, 0.25), Kit.mat(Color(0.9, 0.88, 0.82), 0.15, 0.05), 16)
+	var petals: Array[Transform3D] = []
+	var petal_c: Array = []
+	var frng := RandomNumberGenerator.new()
+	frng.seed = 21
+	for k in 9:
+		var a := frng.randf() * TAU
+		var head := ct + Vector3(0.25, 0, 0.25) + Vector3(cos(a) * 0.08, 0.36 + frng.randf() * 0.1, sin(a) * 0.08)
+		Kit.add_cylinder(self, 0.004, head.y - ct.y - 0.2, (head + ct + Vector3(0.25, 0.2, 0.25)) / 2.0, Kit.mat(Color(0.25, 0.4, 0.15)), 0, -1.0, 4,
+			Vector3(sin(a) * 0.2, 0, -cos(a) * 0.2))
+		for j in 5:
+			var pa := TAU * j / 5.0
+			petals.append(Transform3D(Basis(Vector3.UP, pa) * Basis(Vector3.RIGHT, -0.6) * Basis.from_scale(Vector3(0.025, 0.006, 0.04)),
+				head + Vector3(cos(pa) * 0.025, 0, sin(pa) * 0.025)))
+			petal_c.append([Color(0.95, 0.85, 0.9), Color(0.85, 0.2, 0.3), Color(1.0, 0.75, 0.3)][k % 3])
+	Kit.add_multimesh(self, Kit.sphere_mesh(1.0, 6), petals, Kit.mm_mat(0.6), petal_c)
+	# A library globe by the bookshelves.
+	var gp := Vector3(-12.9, 0, -5.7)
+	Kit.add_lathe(self, PackedVector2Array([Vector2(0, 0), Vector2(0.2, 0), Vector2(0.2, 0.03), Vector2(0.05, 0.06), Vector2(0.035, 0.5),
+		Vector2(0.06, 0.6), Vector2(0, 0.62)]), gp, mantel, 16)
+	Kit.add_sphere(self, 0.25, gp + Vector3(0, 0.88, 0), Kit.tmat(Color(0.75, 0.68, 0.48), "plaster", 2.0, 0.5), 0, 24)
+	var meridian := MeshInstance3D.new()
+	var mtm := TorusMesh.new()
+	mtm.inner_radius = 0.265
+	mtm.outer_radius = 0.28
+	mtm.rings = 40
+	meridian.mesh = mtm
+	meridian.material_override = brass
+	meridian.position = gp + Vector3(0, 0.88, 0)
+	meridian.rotation = Vector3(PI / 2, 0, 0.4)
+	meridian.layers = Kit.vis_layers
+	add_child(meridian)
+	# Brass wall sconces with glowing shades either side of the east-wall paintings.
+	for z: float in [-5.2, -2.8, 2.8, 5.2]:
+		var sp := Vector3(-7.25, 2.4, z)
+		Kit.add_box(self, Vector3(0.02, 0.18, 0.08), sp, brass)
+		Kit.add_cylinder(self, 0.01, 0.16, sp + Vector3(-0.08, 0.02, 0), brass, 0, -1.0, 6, Vector3(0, 0, PI / 2))
+		Kit.add_cylinder(self, 0.07, 0.12, sp + Vector3(-0.16, 0.12, 0), Kit.mat(Color(1.0, 0.86, 0.62), 0.9, 0.0, 1.8), 0, 0.045, 14)
 	# Bookshelves along the north wall, full of books.
 	var shelf := _wood(Color("3b2618"), 0.5)
 	var rng := RandomNumberGenerator.new()
