@@ -312,6 +312,9 @@ On release the throw velocity is the hand's smoothed velocity × 1.05.
      fireplace, sunken pool, string lights, backyard and lawn.
    - The jukebox got outdoor speakers.
    - The test grew from 28 to 42 checks, all passing.
+   - It first ran at 73 fps on the headset (488 draw calls). Static-mesh merging restored
+     90 fps (56–124 draw calls).
+   - The code was pushed to GitHub at https://github.com/deaner117/Funbar (branch `main`).
 
 ---
 
@@ -319,10 +322,18 @@ On release the throw velocity is the hand's smoothed velocity × 1.05.
 
 - **Quest rendering**: don't turn MSAA back on, and keep foveation at level 1. If the headset
   shows something the desktop doesn't, use `screenshot.ps1` plus the Stats log.
-- **Performance**: Quest 3 at 90 fps. Before the detail pass it ran about 284 draw calls at
-  90 fps. Use MultiMesh for anything repeated, avoid shadows (all lights have shadows off), and
-  keep transparent overdraw low (particles and halos are small). Check the Stats line after big
-  additions.
+- **Performance**: the Quest 3 is **draw-call bound**.
+  - The detail pass first brought it to 488 draw calls at 73 fps.
+    `Kit.merge_static()` (called at the end of `mansion.build()` and for the props'
+    fixtures) merges static meshes per material per room. That brought it to 56–124 draw calls
+    at a steady 90 fps.
+  - Anything built in `mansion.gd` is merged automatically unless it's under a node in the skip
+    list (fires, the floats), uses a transparent or shader material, or is in a group of one.
+    So things you need to move or animate after build must be skipped or live outside the
+    mansion node.
+  - Use MultiMesh for anything repeated, avoid shadows (all lights have them off), and keep
+    transparent overdraw low.
+  - Check the Stats log line after big additions.
 - **Two worlds in one tree in tests**: `tests/_multi.gd` runs two Mains with `own_world_3d`, so
   `get_tree().get_nodes_in_group(...)` returns nodes from both players. Filter with
   `main.is_ancestor_of(node)` or compare `get_world_3d()`.

@@ -507,6 +507,88 @@ void fragment() {
 	return m
 
 
+## Merges the static meshes under `root` that share a material, visual layers and region into
+## one mesh each, so hundreds of draw calls become a few dozen (the Quest is draw-call bound).
+## Skips anything under a node in `skip`, transparent and shader materials, and multi-surface
+## meshes. region_of(world position) -> String keeps areas apart, so culling still works and
+## each mesh stays under the mobile renderer's 8-lights-per-object limit. Merged meshes made
+## from nodes in `structure` (hidden in passthrough mode) are appended to it. Collision
+## bodies are kept; only their meshes move. Returns how many meshes were merged away.
+static func merge_static(root: Node3D, skip: Array, region_of: Callable, structure: Array = []) -> int:
+	var skip_ids := {}
+	for n: Node in skip:
+		skip_ids[n.get_instance_id()] = true
+	var struct_ids := {}
+	for n: Node in structure:
+		struct_ids[n.get_instance_id()] = true
+	var groups := {}   # key -> [material, layers, is_structure, [MeshInstance3D...]]
+	var stack: Array[Node] = [root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if skip_ids.has(n.get_instance_id()):
+			continue
+		for c in n.get_children():
+			stack.append(c)
+		var mi := n as MeshInstance3D
+		if mi == null or mi.mesh == null or mi.mesh.get_surface_count() != 1:
+			continue
+		var m := mi.material_override as StandardMaterial3D
+		if m == null or m.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED or not m.uv1_world_triplanar and m.albedo_texture != null:
+			continue
+		var is_struct := struct_ids.has(mi.get_instance_id()) or struct_ids.has(mi.get_parent().get_instance_id())
+		var region: String = region_of.call(mi.global_transform * mi.mesh.get_aabb().get_center())
+		var key := "%d|%d|%s|%s" % [m.get_instance_id(), mi.layers, region, is_struct]
+		if not groups.has(key):
+			groups[key] = [m, mi.layers, is_struct, []]
+		groups[key][3].append(mi)
+	var merged := 0
+	var to_root := root.global_transform.affine_inverse()
+	for key: String in groups:
+		var g: Array = groups[key]
+		var list: Array = g[3]
+		if list.size() < 2:
+			continue
+		var verts := PackedVector3Array()
+		var norms := PackedVector3Array()
+		var idx := PackedInt32Array()
+		for mi: MeshInstance3D in list:
+			var arr := mi.mesh.surface_get_arrays(0)
+			var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			var nr: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+			var t := to_root * mi.global_transform
+			var nb := t.basis.inverse().transposed()
+			var base := verts.size()
+			for i in v.size():
+				verts.append(t * v[i])
+				norms.append((nb * nr[i]).normalized())
+			var src_idx: Variant = arr[Mesh.ARRAY_INDEX]
+			if src_idx is PackedInt32Array and (src_idx as PackedInt32Array).size() > 0:
+				for i: int in src_idx:
+					idx.append(base + i)
+			else:
+				for i in v.size():
+					idx.append(base + i)
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = verts
+		arrays[Mesh.ARRAY_NORMAL] = norms
+		arrays[Mesh.ARRAY_INDEX] = idx
+		var am := ArrayMesh.new()
+		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		var out := MeshInstance3D.new()
+		out.mesh = am
+		out.material_override = g[0]
+		out.layers = g[1]
+		root.add_child(out)
+		if g[2]:
+			structure.append(out)
+		for mi: MeshInstance3D in list:
+			mi.get_parent().remove_child(mi)
+			mi.queue_free()
+		merged += list.size() - 1
+	return merged
+
+
 ## [x, y, z, qx, qy, qz, qw] for sending a transform (scale dropped), rounded to the millimetre.
 static func pack_tf(t: Transform3D) -> Array:
 	var q := t.basis.get_rotation_quaternion()

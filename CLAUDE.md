@@ -32,8 +32,10 @@ history, the gotchas and what's next. This file is the short version.
   features.
 - Never re-enable MSAA, and keep foveation at level 1: either one made the Quest show a flat
   grey screen.
-- Keep to 90 fps on the Quest. Use MultiMesh for repeated things, no shadows, and little
-  transparent overdraw.
+- Keep to 90 fps on the Quest; it is draw-call bound. `Kit.merge_static()` merges the static
+  meshes in mansion.gd per material per room (488 down to about 100 draw calls), so anything
+  you animate after build must be skipped from the merge. Use MultiMesh for repeated things,
+  no shadows, and little transparent overdraw.
 - New networked features become a module with a message prefix: `handle`, `full_state`,
   `on_identity_changed`, `on_peer_left`, registered in `main._build_games`. Grabbables join the
   `grabbable` group with `grab_distance`/`on_grab`/`on_release`.

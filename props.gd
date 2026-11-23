@@ -115,6 +115,8 @@ func setup(anchors: Dictionary) -> void:
 	specs += _build_cornhole(_pivot(anchors["cornhole_a"]), Color(0.78, 0.12, 0.12))
 	specs += _build_cornhole(_pivot(anchors["cornhole_b"]), Color(0.12, 0.3, 0.75))
 	Kit.vis_layers = layers_before
+	# Merge the fixtures' meshes (before the props exist, so those stay separate).
+	Kit.merge_static(self, [], func(_p: Vector3) -> String: return "out")
 	for s: Array in specs:
 		_make(s[0], s[1], s[2])
 	_sizzle = AudioStreamPlayer3D.new()

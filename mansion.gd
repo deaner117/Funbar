@@ -105,6 +105,13 @@ func build() -> void:
 	_string_lights()
 	_grounds()
 	Kit.vis_layers = Kit.VIS_INDOOR
+	# One mesh per material per room: the Quest is limited by draw calls, not triangles.
+	var skip: Array = _floats.duplicate()
+	for f in find_children("*", "Node3D", false, false):
+		if f is Fire:
+			skip.append(f)
+	var merged := Kit.merge_static(self, skip, room_at, structure)
+	print("Mansion: merged %d meshes" % merged)
 
 
 func set_structure_visible(on: bool) -> void:
