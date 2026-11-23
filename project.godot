@@ -1,0 +1,36 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+
+config_version=5
+
+[application]
+
+config/name="Sam and Dean Worldwide"
+run/main_scene="res://main.tscn"
+boot_splash/bg_color=Color(0, 0, 0, 1)
+config/features=PackedStringArray("4.7", "Mobile")
+
+[audio]
+
+driver/enable_input=true
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
+common/physics_ticks_per_second=90
+
+[rendering]
+
+renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
+textures/vram_compression/import_etc2_astc=true
+
+[xr]
+
+openxr/enabled=true
+openxr/reference_space=2
+openxr/foveation_level=1
+openxr/foveation_dynamic=true
+shaders/enabled=true
+openxr/extensions/meta/passthrough=true

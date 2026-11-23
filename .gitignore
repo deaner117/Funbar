@@ -1,0 +1,9 @@
+.godot/
+/android/
+build/
+tools/
+screenshots/
+server/node_modules/
+server/.wrangler/
+quest-ip.txt
+*.apk
