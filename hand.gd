@@ -99,7 +99,9 @@ func _physics_process(_delta: float) -> void:
 	var t := get_float("trigger")
 	if not _trigger and t > PRESS:
 		_trigger = true
-		if _hover and _hover.has_method("press") and _hover.press():
+		if held != null and held.has_method("on_trigger"):
+			held.on_trigger(self)
+		elif _hover and _hover.has_method("press") and _hover.press():
 			buzz(0.25, 0.03)
 	elif _trigger and t < LET_GO:
 		_trigger = false

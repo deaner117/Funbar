@@ -64,8 +64,16 @@ var spawns := {
 ## Where main puts the games and props: name -> [position, yaw] (yaw turns the thing's +z
 ## front), except "pool" -> [Rect2 (x, z), water height].
 var anchors := {
-	"air_hockey": [Vector3(-2.6, 0, -13.0), 0.0],
-	"connect_four": [Vector3(4.6, 0, -13.0), -PI / 2],
+	"air_hockey": [Vector3(-6.5, 0, -13.0), 0.0],
+	"connect_four": [Vector3(-2.8, 0, -11.4), 0.0],
+	"maze": [Vector3(-4.6, 0, -26.25), 0.0],
+	"pinball": [Vector3(-1.6, 0, -25.9), 0.0],
+	"racer": [Vector3(2.4, 0, -25.9), 0.0],
+	"gallery": [Vector3(9.4, 0, -18.4), 0.0],
+	"skee_1": [Vector3(9.2, 0, -15.0), -PI / 2],
+	"skee_2": [Vector3(9.2, 0, -13.9), -PI / 2],
+	"hoops": [Vector3(9.2, 0, -10.2), -PI / 2],
+	"bartender": [Vector3(-12.95, 0, -17.0), PI / 2],
 	"hoop": [Vector3(20.75, 0, 0), -PI / 2],
 	"ball_rack": [Vector3(15.5, 0, 5.2), PI],
 	"scoreboard": [Vector3(14.0, 3.45, -6.8), 0.0],
@@ -86,7 +94,7 @@ var anchors := {
 ## Which room a point is in (by floor area), for "where's my friend".
 var rooms := {
 	"Grand Hall": Rect2(-7, -7, 14, 14),
-	"Game Room": Rect2(-7, -19, 14, 12),
+	"Game Room": Rect2(-14, -27, 28, 20),
 	"Gym": Rect2(7, -7, 14, 14),
 	"Lounge": Rect2(-21, -7, 14, 14),
 	"Patio": Rect2(-10, 7, 20, 14),
@@ -529,55 +537,199 @@ func _grand_hall() -> void:
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 
+const CARPET_SHADER := """
+shader_type spatial;
+// Arcade carpet: neon shapes (rings, triangles, zigzags, dots) scattered on black.
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+varying vec3 wpos;
+void vertex() { wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+void fragment() {
+	vec2 p = wpos.xz * 2.2;
+	float fw = length(fwidth(p));
+	vec3 col = vec3(0.02, 0.015, 0.04);
+	float glow = 0.0;
+	vec3 neon = vec3(0.0);
+	for (int k = 0; k < 2; k++) {
+		vec2 q = p + float(k) * vec2(0.37, 0.71);
+		vec2 cell = floor(q);
+		vec2 f = fract(q) - 0.5;
+		float h = hash(cell + float(k) * 17.0);
+		float h2 = hash(cell + 3.7);
+		vec3 c = 0.5 + 0.5 * cos(6.2831 * (h2 + vec3(0.0, 0.33, 0.67)));
+		c = normalize(c + 0.05) * 1.1;
+		float ang = h * 6.2831;
+		vec2 r = vec2(cos(ang) * f.x - sin(ang) * f.y, sin(ang) * f.x + cos(ang) * f.y);
+		float d;
+		if (h < 0.3) { d = abs(length(r) - 0.22) - 0.035; }
+		else if (h < 0.55) { vec2 a = abs(r); d = max(a.x * 0.866 + r.y * 0.5, -r.y) - 0.16; d = abs(d) - 0.03; }
+		else if (h < 0.8) { d = abs(r.y - 0.08 * sin(r.x * 28.0)) - 0.025; d = max(d, abs(r.x) - 0.32); }
+		else { d = length(r) - 0.07; }
+		float m = 1.0 - smoothstep(0.0, max(0.015, fw * 0.6), d);
+		neon = mix(neon, c, m);
+		glow = max(glow, m);
+	}
+	// Far away the shapes would shimmer: fade to their average colour.
+	float fade = smoothstep(0.05, 0.15, fw);
+	glow = mix(glow, 0.0, fade);
+	neon = mix(neon, vec3(0.6, 0.55, 0.75), fade);
+	ALBEDO = mix(col, neon * 0.8, glow);
+	EMISSION = neon * glow * 0.4;
+	ROUGHNESS = 1.0;
+	SPECULAR = 0.0;
+}
+"""
+
+
 func _game_room() -> void:
-	var carpet := Kit.tmat(Color("2a2e3d"), "carpet", 2.0, 1.0)
-	var wall := Kit.tmat(Color("1d3a4a"), "plaster", 0.5, 0.9)
-	var ceiling := Kit.mat(Color("181b22"), 0.9)
-	_room(-7, 7, -19, -7, 4.0, carpet, wall, ceiling, Kit.mat(Color("101418"), 0.5), {"s": 0.0})
-	# Neon trim and sign.
-	for z: float in [-18.74, -7.26]:
-		Kit.add_box(self, Vector3(13.4, 0.04, 0.03), Vector3(0, 3.6, z), Kit.flat(Color(0.2, 0.9, 1.0)))
-	for x: float in [-6.74, 6.74]:
-		Kit.add_box(self, Vector3(0.03, 0.04, 11.4), Vector3(x, 3.6, -13), Kit.flat(Color(1.0, 0.3, 0.8)))
-	_sign(Vector3(0, 3.0, -18.76), 0.0, "GAME ROOM", 0.45, Color(1.0, 0.35, 0.85))
-	# Arcade cabinets along the north wall (decoration).
-	var screens := [Color(0.2, 0.9, 0.5), Color(1.0, 0.6, 0.2), Color(0.4, 0.6, 1.0), Color(1.0, 0.3, 0.4)]
-	var cab := Kit.mat(Color(0.1, 0.1, 0.14), 0.4, 0.2)
+	# The arcade: a big dark hall (28 x 20 m) with a neon carpet, neon tubes and the bar.
+	var carpet := ShaderMaterial.new()
+	carpet.shader = Shader.new()
+	carpet.shader.code = CARPET_SHADER
+	var wall := Kit.tmat(Color("1b1530"), "plaster", 0.5, 0.9)
+	var ceiling := Kit.mat(Color("0c0b14"), 0.9)
+	_room(-14, 14, -27, -7, 4.5, carpet, wall, ceiling, Kit.mat(Color("0a0a12"), 0.5), {"s": 0.0})
+	# Neon tubes along the walls (two colours), and ceiling light panels.
+	var cyan := Kit.flat(Color(0.2, 0.95, 1.0))
+	var pink := Kit.flat(Color(1.0, 0.25, 0.75))
+	var tube := func(a: Vector3, b: Vector3, m: Material) -> void:
+		var mi := MeshInstance3D.new()
+		mi.mesh = Kit.tube_mesh([PackedVector3Array([a, b])], 0.018, 6)
+		mi.material_override = m
+		mi.layers = Kit.vis_layers
+		add_child(mi)
+	for y: Array in [[4.0, cyan], [2.4, pink]]:
+		tube.call(Vector3(-13.75, y[0], -26.75), Vector3(13.75, y[0], -26.75), y[1])
+		tube.call(Vector3(-13.75, y[0], -26.75), Vector3(-13.75, y[0], -7.25), y[1])
+		tube.call(Vector3(13.75, y[0], -26.75), Vector3(13.75, y[0], -7.25), y[1])
+		tube.call(Vector3(-13.75, y[0], -7.25), Vector3(-1.4, y[0], -7.25), y[1])
+		tube.call(Vector3(1.4, y[0], -7.25), Vector3(13.75, y[0], -7.25), y[1])
+	var panel := Kit.flat(Color(0.75, 0.78, 0.95))
+	for x: float in [-8.0, 0.0, 8.0]:
+		for z: float in [-11.5, -17.0, -22.5]:
+			Kit.add_box(self, Vector3(1.6, 0.03, 0.5), Vector3(x, 4.47, z), panel)
+	var title := _sign(Vector3(0, 3.35, -26.76), 0.0, "WORLDWIDE ARCADE", 0.6, Color(1.0, 0.3, 0.85))
+	title.outline_size = 24
+	title.outline_modulate = Color(1.0, 0.1, 0.6, 0.35)
+	var sub := _sign(Vector3(0, 2.85, -26.76), 0.0, "★  HIGH SCORES  ·  NO QUARTERS NEEDED  ★", 0.16, Color(0.3, 0.95, 1.0))
+	sub.outline_size = 12
+	sub.outline_modulate = Color(0.1, 0.6, 1.0, 0.3)
+	# Optical illusions with an arcade feel.
+	_painting(Vector3(-6.0, 2.2, -7.23), PI, Vector2(1.5, 1.5), 14)
+	_painting(Vector3(6.0, 2.2, -7.23), PI, Vector2(2.0, 1.0), 15)
+	_painting(Vector3(-9.0, 3.0, -26.77), 0.0, Vector2(1.6, 1.1), 10)
+	_painting(Vector3(13.77, 2.3, -22.0), -PI / 2, Vector2(1.5, 1.2), 5)
+	_bar()
+	# High-top tables with neon-ringed tops and chrome stools in the middle of the hall.
+	var chrome := Kit.mat(Color(0.82, 0.84, 0.88), 0.15, 0.7)
+	var top := Kit.mat(Color(0.05, 0.05, 0.07), 0.15, 0.3)
+	for t: Array in [[Vector3(-2.6, 0, -17.2), Color(0.2, 0.95, 1.0)], [Vector3(2.6, 0, -17.2), Color(1.0, 0.25, 0.75)],
+			[Vector3(0.0, 0, -20.6), Color(1.0, 0.8, 0.2)]]:
+		var c: Vector3 = t[0]
+		Kit.add_cylinder(self, 0.3, 0.03, c + Vector3(0, 0.015, 0), chrome, 0, 0.26, 24)
+		Kit.add_cylinder(self, 0.04, 1.05, c + Vector3(0, 0.55, 0), chrome, Kit.LAYER_FURNITURE, -1.0, 12)
+		Kit.add_cylinder(self, 0.4, 0.04, c + Vector3(0, 1.08, 0), top, Kit.LAYER_FURNITURE, -1.0, 32)
+		var ring := MeshInstance3D.new()
+		var tm := TorusMesh.new()
+		tm.inner_radius = 0.392
+		tm.outer_radius = 0.412
+		tm.rings = 40
+		tm.ring_segments = 6
+		ring.mesh = tm
+		ring.material_override = Kit.flat(t[1])
+		ring.position = c + Vector3(0, 1.08, 0)
+		ring.layers = Kit.vis_layers
+		add_child(ring)
+		for k in 3:
+			var a := TAU * k / 3.0 + 0.4
+			_stool(c + Vector3(cos(a), 0, sin(a)) * 0.68, _fabric(t[1].darkened(0.45)))
+	# A sofa and a table for watching.
+	_sofa(Vector3(4.5, 0, -7.75), PI, Color("4b2a6b"), 2.1, Color("2ed6d6"))
+	_sofa(Vector3(-4.5, 0, -7.75), PI, Color("4b2a6b"), 2.1, Color("ff6fb5"))
+	for x: float in [-8.0, 0.0, 8.0]:
+		for z: float in [-12.0, -21.5]:
+			Kit.omni(self, Vector3(x, 4.1, z), Color(0.85, 0.85, 1.0), 1.0, 9.0)
+
+
+## A chrome bar stool: round base, column, foot ring, padded seat.
+func _stool(p: Vector3, seat: Material) -> void:
+	var chrome := Kit.mat(Color(0.82, 0.84, 0.88), 0.15, 0.7)
+	Kit.add_cylinder(self, 0.22, 0.025, p + Vector3(0, 0.0125, 0), chrome, 0, 0.18, 20)
+	Kit.add_cylinder(self, 0.028, 0.72, p + Vector3(0, 0.37, 0), chrome, Kit.LAYER_FURNITURE, -1.0, 10)
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.15
+	tm.outer_radius = 0.17
+	ring.mesh = tm
+	ring.material_override = chrome
+	ring.position = p + Vector3(0, 0.3, 0)
+	ring.layers = Kit.vis_layers
+	add_child(ring)
+	Kit.add_cylinder(self, 0.2, 0.09, p + Vector3(0, 0.77, 0), seat, 0, 0.21, 20)
+	Kit.add_cylinder(self, 0.205, 0.02, p + Vector3(0, 0.72, 0), chrome, 0, -1.0, 20)
+
+
+## The arcade bar along the west wall: a curved-front counter with a lit strip, a polished top
+## with taps, a mirrored back bar with glowing shelves of bottles, and chrome stools.
+func _bar() -> void:
+	var z0 := -21.0
+	var z1 := -13.0
+	var zc := (z0 + z1) / 2.0
+	var length := z1 - z0
+	var front_x := -11.9
+	var wood := _wood(Color("2a1810"), 0.35)
+	var chrome := Kit.mat(Color(0.82, 0.84, 0.88), 0.15, 0.7)
+	var black := Kit.mat(Color(0.03, 0.03, 0.04), 0.3, 0.2)
+	# Counter body with vertical panels, a foot rail, a glowing strip and a granite top.
+	Kit.add_rbox(self, Vector3(0.6, 1.05, length), Vector3(front_x - 0.3, 0.525, zc), wood, 0.03, Kit.LAYER_FURNITURE)
+	for i in int(length / 0.8):
+		Kit.add_rbox(self, Vector3(0.02, 0.8, 0.7), Vector3(front_x + 0.005, 0.5, z0 + 0.4 + i * 0.8), Kit.tmat(Color("3d2416"), "grain", 3.0, 0.3), 0.01)
+	Kit.add_box(self, Vector3(0.02, 0.03, length), Vector3(front_x + 0.02, 0.95, zc), Kit.flat(Color(1.0, 0.35, 0.8)))
+	Kit.add_cylinder(self, 0.025, length, Vector3(front_x + 0.2, 0.22, zc), chrome, 0, -1.0, 12, Vector3(PI / 2, 0, 0))
+	for i in 6:
+		Kit.add_cylinder(self, 0.012, 0.2, Vector3(front_x + 0.1, 0.22, z0 + 0.5 + i * 1.4), chrome, 0, -1.0, 6, Vector3(0, 0, PI / 2))
+	var granite := Kit.tmat(Color(0.12, 0.12, 0.14), "pavers", 3.0, 0.12)
+	Kit.add_rbox(self, Vector3(0.8, 0.06, length + 0.1), Vector3(front_x - 0.28, 1.08, zc), granite, 0.025)
+	# Beer taps and a tray of glasses.
 	for i in 4:
-		var p := _pivot(Vector3(-4.5 + i * 1.1, 0, -18.4), 0.0)
-		var screen: Color = screens[i]
-		Kit.add_rbox(p, Vector3(0.8, 1.15, 0.7), Vector3(0, 0.575, 0), cab, 0.03, Kit.LAYER_FURNITURE)
-		Kit.add_rbox(p, Vector3(0.8, 0.75, 0.45), Vector3(0, 1.5, -0.12), cab, 0.03)
-		Kit.add_box(p, Vector3(0.6, 0.45, 0.02), Vector3(0, 1.45, 0.11), Kit.flat(screen), 0, Vector3(-0.2, 0, 0))
-		Kit.add_rbox(p, Vector3(0.74, 0.08, 0.32), Vector3(0, 1.1, 0.3), Kit.mat(Color(0.15, 0.15, 0.2)), 0.02, 0, Vector3(0.25, 0, 0))
-		Kit.add_sphere(p, 0.025, Vector3(-0.15, 1.17, 0.3), Kit.mat(Color(0.9, 0.1, 0.1), 0.3), 0, 8)
-		for b in 3:
-			Kit.add_cylinder(p, 0.018, 0.02, Vector3(0.05 + b * 0.07, 1.155, 0.32), Kit.mat(screen, 0.3), 0, -1.0, 10)
-		Kit.add_rbox(p, Vector3(0.82, 0.18, 0.5), Vector3(0, 1.95, -0.1), Kit.flat(screen.darkened(0.3)), 0.02)
-	# A bar along the west wall with stools, bottles on a back shelf.
-	var wood := _wood(Color("3b2618"), 0.4)
-	Kit.add_rbox(self, Vector3(0.6, 1.05, 4.0), Vector3(-6.2, 0.525, -13.0), wood, 0.03, Kit.LAYER_FURNITURE)
-	Kit.add_rbox(self, Vector3(0.78, 0.05, 4.1), Vector3(-6.15, 1.07, -13.0), Kit.mat(Color("111111"), 0.15, 0.3), 0.02)
-	Kit.add_rbox(self, Vector3(0.25, 0.03, 3.4), Vector3(-6.66, 1.6, -13.0), wood, 0.01)
+		var tz := z0 + 0.6 + i * 0.3
+		Kit.add_cylinder(self, 0.025, 0.35, Vector3(front_x - 0.5, 1.28, tz), chrome, 0, -1.0, 10)
+		Kit.add_cylinder(self, 0.012, 0.12, Vector3(front_x - 0.43, 1.42, tz), chrome, 0, -1.0, 8, Vector3(0, 0, PI / 2))
+		Kit.add_rbox(self, Vector3(0.03, 0.12, 0.03), Vector3(front_x - 0.37, 1.5, tz), Kit.mat([Color(0.85, 0.15, 0.15), Color(0.95, 0.8, 0.2),
+			Color(0.15, 0.4, 0.85), Color(0.1, 0.6, 0.3)][i], 0.4), 0.01)
+	# Back bar on the wall: a dark mirror, three glass shelves lit from below, rows of bottles.
+	var wall_x := -13.78
+	Kit.add_box(self, Vector3(0.03, 1.7, length - 1.0), Vector3(wall_x + 0.02, 2.05, zc), Kit.mat(Color(0.25, 0.27, 0.32), 0.05, 0.9))
+	Kit.add_rbox(self, Vector3(0.5, 0.9, length - 0.6), Vector3(wall_x + 0.25, 0.45, zc), wood, 0.02, Kit.LAYER_FURNITURE)
+	Kit.add_rbox(self, Vector3(0.52, 0.04, length - 0.5), Vector3(wall_x + 0.26, 0.92, zc), granite, 0.01)
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 5
+	rng.seed = 11
 	var bottle_x: Array[Transform3D] = []
 	var bottle_c: Array = []
-	for i in 14:
-		var h := rng.randf_range(0.8, 1.2)
-		bottle_x.append(Transform3D(Basis.IDENTITY.scaled(Vector3(1, h, 1)), Vector3(-6.66, 1.615 + 0.14 * h, -14.6 + i * 0.24)))
-		bottle_c.append([Color(0.2, 0.5, 0.2, 1), Color(0.55, 0.3, 0.1, 1), Color(0.75, 0.75, 0.8, 1), Color(0.5, 0.1, 0.15, 1)][i % 4])
-	Kit.add_multimesh(self, Kit.capsule_mesh(0.035, 0.28, 10), bottle_x, Kit.mm_mat(0.15), bottle_c)
-	for i in 4:
-		var z := -14.4 + i * 0.95
-		Kit.add_cylinder(self, 0.03, 0.72, Vector3(-5.5, 0.36, z), Kit.mat(Color(0.7, 0.7, 0.72), 0.3, 0.9), 0, -1.0, 8)
-		Kit.add_cylinder(self, 0.2, 0.025, Vector3(-5.5, 0.015, z), Kit.mat(Color(0.7, 0.7, 0.72), 0.3, 0.9), 0, -1.0, 16)
-		Kit.add_rbox(self, Vector3(0.4, 0.08, 0.4), Vector3(-5.5, 0.76, z), _fabric(Color("b3283a")), 0.035)
-	# A sofa to watch from.
-	_sofa(Vector3(2.4, 0, -8.3), PI, Color("4b2a6b"), 1.6)
-	Kit.omni(self, Vector3(-2.6, 3.4, -13.0), Color(0.9, 0.95, 1.0), 1.5, 8.0)
-	Kit.omni(self, Vector3(3.8, 3.4, -13.0), Color(0.95, 0.9, 1.0), 1.3, 8.0)
-	Kit.omni(self, Vector3(0, 3.0, -9.0), Color(1.0, 0.85, 0.95), 0.6, 6.0)
+	var neck_x: Array[Transform3D] = []
+	var palette := [Color(0.15, 0.45, 0.2), Color(0.6, 0.32, 0.08), Color(0.85, 0.85, 0.9), Color(0.45, 0.08, 0.12),
+		Color(0.2, 0.35, 0.7), Color(0.9, 0.7, 0.25), Color(0.05, 0.05, 0.06)]
+	for s in 3:
+		var y := 1.35 + s * 0.45
+		Kit.add_box(self, Vector3(0.24, 0.02, length - 1.2), Vector3(wall_x + 0.14, y, zc), Kit.mat(Color(0.7, 0.85, 0.9, 0.5), 0.05))
+		Kit.add_box(self, Vector3(0.02, 0.012, length - 1.2), Vector3(wall_x + 0.25, y - 0.015, zc), Kit.flat(Color(1.0, 0.75, 0.45) if s != 1 else Color(0.4, 0.8, 1.0)))
+		var z := z0 + 0.7
+		while z < z1 - 0.7:
+			var h := rng.randf_range(0.85, 1.25)
+			bottle_x.append(Transform3D(Basis.IDENTITY.scaled(Vector3(1, h, 1)), Vector3(wall_x + 0.14, y + 0.01 + 0.12 * h, z)))
+			neck_x.append(Transform3D(Basis.IDENTITY, Vector3(wall_x + 0.14, y + 0.01 + 0.24 * h + 0.04, z)))
+			bottle_c.append(palette[rng.randi() % palette.size()])
+			z += rng.randf_range(0.11, 0.16)
+	Kit.add_multimesh(self, Kit.cylinder_mesh(0.035, 0.24, -1.0, 12), bottle_x, Kit.mm_mat(0.12), bottle_c)
+	Kit.add_multimesh(self, Kit.cylinder_mesh(0.012, 0.08, 0.016, 8), neck_x, Kit.mm_mat(0.12), bottle_c)
+	var sign := _sign(Vector3(wall_x + 0.04, 3.3, zc), PI / 2, "THE  WORLDWIDE  BAR", 0.3, Color(1.0, 0.7, 0.3))
+	sign.outline_size = 16
+	sign.outline_modulate = Color(1.0, 0.4, 0.1, 0.35)
+	# Chrome stools with red seats.
+	var red := _fabric(Color("b3283a"))
+	for i in 6:
+		_stool(Vector3(front_x + 0.55, 0, z0 + 0.8 + i * 1.3), red)
+	var warm := Kit.omni(self, Vector3(-12.6, 2.9, zc), Color(1.0, 0.78, 0.55), 1.1, 6.0)
+	warm.light_cull_mask = Kit.VIS_INDOOR
 
 
 func _gym() -> void:

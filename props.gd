@@ -71,6 +71,9 @@ class Prop extends RigidBody3D:
 	func on_release(h: Node) -> void:
 		game.let_go(self, h)
 
+	func on_trigger(h: Node) -> void:
+		game.prop_trigger(self, h)
+
 	## Where a marshmallow is, on the end of its stick.
 	func tip() -> Vector3:
 		return to_global(Vector3(0, 0, -STICK_L / 2.0 + 0.03))
@@ -93,6 +96,8 @@ class Grill extends Node3D:
 var main: Node
 var props: Array[Prop] = []
 
+## kind -> Callable(prop, hand): what the trigger does while holding one (the arcade blaster).
+var trigger_handlers := {}
 var _boards: Array[Node3D] = []
 var _sizzle: AudioStreamPlayer3D
 var _grill: Grill
@@ -309,6 +314,64 @@ func _build_cornhole(p: Node3D, bag_color: Color) -> Array:
 
 # ---------------------------------------------------------------- the props themselves
 
+## Adds a prop for another module (arcade balls, the blaster, cocktails). Call in the same
+## order on every headset: props are matched up by index.
+func add_prop(kind: String, home: Transform3D, extra: Variant = null) -> Prop:
+	_make(kind, home, extra)
+	var b := props[props.size() - 1]
+	b.owner_slot = main.host_slot()
+	b.freeze = b.owner_slot != main.me()
+	return b
+
+
+func props_of(kind: String) -> Array[Prop]:
+	var out: Array[Prop] = []
+	for b in props:
+		if b.kind == kind:
+			out.append(b)
+	return out
+
+
+## Hides a prop on every headset (the bartender is holding it).
+func take_for_serving(b: Prop) -> void:
+	if b.hand != null:
+		return
+	_event(b, "serve")
+
+
+## Puts a prop down at xf for everyone (the bartender serving a drink).
+func place(b: Prop, xf: Transform3D) -> void:
+	if b.hand != null:
+		return
+	b.owner_slot = main.me()
+	b.remote_held = false
+	b.gone_until = 0.0
+	b.global_transform = xf
+	b.target = xf
+	b.target_v = Vector3.ZERO
+	b.linear_velocity = Vector3.ZERO
+	b.angular_velocity = Vector3.ZERO
+	b.moving_for = 0.0
+	_send(b)
+	_event(b, "show")
+
+
+func prop_trigger(b: Prop, hand: Node) -> void:
+	if trigger_handlers.has(b.kind):
+		(trigger_handlers[b.kind] as Callable).call(b, hand)
+
+
+## Puts a prop back home now (and tells everyone), e.g. a skee-ball returning down the chute.
+func send_home(b: Prop) -> void:
+	if b.hand != null:
+		return
+	b.owner_slot = main.me()
+	b.remote_held = false
+	_restore(b)
+	b.freeze = false
+	_send(b)
+
+
 func _make(kind: String, home: Transform3D, extra: Variant) -> void:
 	var b := Prop.new()
 	b.game = self
@@ -383,6 +446,51 @@ func _make(kind: String, home: Transform3D, extra: Variant) -> void:
 			bx.size = Vector3(0.15, 0.035, 0.15)
 			shape = bx
 			_bag_visual(b, extra)
+		"skee":
+			b.mass = 0.25
+			b.reach = 0.07
+			pm.friction = 0.6
+			pm.bounce = 0.25
+			b.angular_damp = 0.05
+			var sp := SphereShape3D.new()
+			sp.radius = 0.045
+			shape = sp
+			_vis(b, Kit.sphere_mesh(0.045, 16), Kit.tmat(Color(0.62, 0.38, 0.2), "grain", 12.0, 0.35, 0.0, false))
+		"minibb":
+			b.mass = 0.3
+			b.reach = 0.1
+			pm.friction = 0.8
+			pm.bounce = 0.7
+			b.angular_damp = 0.2
+			var sp := SphereShape3D.new()
+			sp.radius = 0.09
+			shape = sp
+			_vis(b, Kit.sphere_mesh(0.09, 18), Kit.mat(Color(0.93, 0.45, 0.13), 0.7))
+			for r in 2:
+				var ring := MeshInstance3D.new()
+				var tm := TorusMesh.new()
+				tm.inner_radius = 0.0885
+				tm.outer_radius = 0.0925
+				tm.rings = 24
+				tm.ring_segments = 4
+				ring.mesh = tm
+				ring.material_override = Kit.mat(Color(0.1, 0.08, 0.06), 0.8)
+				ring.rotation = Vector3(PI / 2, 0, 0) if r == 0 else Vector3(0, 0, PI / 2)
+				b.add_child(ring)
+		"blaster":
+			b.mass = 0.8
+			b.reach = 0.12
+			var bx := BoxShape3D.new()
+			bx.size = Vector3(0.05, 0.12, 0.45)
+			shape = bx
+			shape_pos = Vector3(0, 0.02, -0.12)
+			_blaster_visual(b)
+		"cocktail":
+			b.mass = 0.3
+			b.reach = 0.06
+			shape = _cyl_shape(0.035, 0.16)
+			shape_pos = Vector3(0, 0.08, 0)
+			_cocktail_visual(b, extra)
 	var cs := CollisionShape3D.new()
 	cs.shape = shape
 	cs.rotation = shape_rot
@@ -411,6 +519,42 @@ func _vis(parent: Node3D, mesh: Mesh, m: Material, pos := Vector3.ZERO, rot := V
 	mi.layers = Kit.VIS_ALL
 	parent.add_child(mi)
 	return mi
+
+
+## A chunky toy blaster: grip at the origin, barrel pointing along -z.
+func _blaster_visual(b: Prop) -> void:
+	var body := Kit.mat(Color(0.95, 0.45, 0.1), 0.4)
+	var dark := Kit.mat(Color(0.12, 0.12, 0.14), 0.5, 0.3)
+	var chrome := Kit.mat(Color(0.8, 0.82, 0.86), 0.2, 0.7)
+	_vis(b, Kit.rbox_mesh(Vector3(0.04, 0.11, 0.05), 0.015), dark, Vector3(0, -0.035, 0.01), Vector3(0.25, 0, 0))
+	_vis(b, Kit.rbox_mesh(Vector3(0.055, 0.07, 0.24), 0.02), body, Vector3(0, 0.04, -0.06))
+	_vis(b, Kit.cylinder_mesh(0.016, 0.26, -1.0, 12), chrome, Vector3(0, 0.05, -0.3), Vector3(PI / 2, 0, 0))
+	_vis(b, Kit.cylinder_mesh(0.024, 0.03, -1.0, 12), body, Vector3(0, 0.05, -0.43), Vector3(PI / 2, 0, 0))
+	_vis(b, Kit.rbox_mesh(Vector3(0.045, 0.05, 0.14), 0.015), dark, Vector3(0, 0.02, 0.12))
+	_vis(b, Kit.cylinder_mesh(0.012, 0.06, -1.0, 10), dark, Vector3(0, 0.1, -0.08), Vector3(PI / 2, 0, 0))
+	_vis(b, Kit.sphere_mesh(0.008, 8), Kit.flat(Color(0.2, 1.0, 0.3)), Vector3(0, 0.08, -0.02))
+	var guard := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.022
+	tm.outer_radius = 0.03
+	guard.mesh = tm
+	guard.material_override = dark
+	guard.rotation = Vector3(0, 0, PI / 2)
+	guard.position = Vector3(0, -0.005, -0.03)
+	b.add_child(guard)
+
+
+## A cocktail glass (extra = liquid colour): stem, bowl, a slice of lime.
+func _cocktail_visual(b: Prop, c: Variant) -> void:
+	var liquid: Color = c if c is Color else Color(0.95, 0.4, 0.5)
+	var glass := Kit.mat(Color(0.85, 0.92, 1.0, 0.3), 0.05)
+	_vis(b, Kit.cylinder_mesh(0.032, 0.006, -1.0, 20), glass, Vector3(0, 0.003, 0))
+	_vis(b, Kit.cylinder_mesh(0.004, 0.08, -1.0, 8), glass, Vector3(0, 0.045, 0))
+	_vis(b, Kit.cylinder_mesh(0.008, 0.075, 0.045, 20), glass, Vector3(0, 0.12, 0))
+	var lm := Kit.mat(Color(liquid.r, liquid.g, liquid.b, 0.85), 0.1, 0.0, 0.2)
+	_vis(b, Kit.cylinder_mesh(0.008, 0.06, 0.039, 20), lm, Vector3(0, 0.112, 0))
+	_vis(b, Kit.cylinder_mesh(0.016, 0.004, -1.0, 12), Kit.mat(Color(0.45, 0.8, 0.2), 0.5), Vector3(0.036, 0.15, 0), Vector3(0, 0, PI / 2))
+	_vis(b, Kit.sphere_mesh(0.008, 8), Kit.mat(Color(0.8, 0.05, 0.1), 0.3), Vector3(-0.01, 0.145, 0.01))
 
 
 func _cake_visual(b: Prop) -> void:
@@ -538,6 +682,9 @@ func grab(b: Prop, hand: Node) -> bool:
 	if b.kind == "marsh":
 		# Sticks go in the hand by the handle, pointing where the hand points.
 		b.hold = Transform3D(Basis.IDENTITY, ht.affine_inverse() * hand.grab_point() - Vector3(0, 0, STICK_L / 2.0 - 0.08))
+	elif b.kind == "blaster":
+		# The grip in the palm, the barrel where the hand points.
+		b.hold = Transform3D(Basis.IDENTITY, ht.affine_inverse() * hand.grab_point() + Vector3(0, 0.03, 0.0))
 	else:
 		b.hold = ht.affine_inverse() * b.global_transform
 	_send(b)
@@ -548,6 +695,12 @@ func let_go(b: Prop, hand: Node) -> void:
 	if b.hand != hand:
 		return
 	b.hand = null
+	if b.kind == "blaster":
+		# Blasters live on their hooks at the gallery counter.
+		_restore(b)
+		b.freeze = false
+		_send(b)
+		return
 	b.freeze = false
 	var v: Vector3 = hand.velocity * THROW_BOOST
 	b.linear_velocity = v.limit_length(14.0)
@@ -631,7 +784,7 @@ func _physics_process(delta: float) -> void:
 					_event(b, "out")
 				if b.hand != null and b.tip().distance_to(_mouth()) < 0.1 and not b.on_fire:
 					_eat(b)
-			"can":
+			"can", "cocktail":
 				if b.hand != null and now > b.cheers_at and b.global_position.distance_to(_mouth()) < 0.12 \
 						and b.global_transform.basis.y.y < 0.5:
 					b.cheers_at = now + 4.0
@@ -793,6 +946,14 @@ func _apply_event(b: Prop, e: String, from: int) -> void:
 			_set_fire(b, false)
 		"hole":
 			main.notify("%s: in the hole!" % main.name_of(from))
+		"serve":
+			# The bartender has it in her hand: hidden until she sets it down.
+			_hide(b, 600.0)
+		"show":
+			b.gone_until = 0.0
+			b.visible = true
+			b.collision_layer = Kit.LAYER_BALL
+			b.freeze = b.owner_slot != main.me()
 
 
 func _on_cake_hit(_other: Node, b: Prop) -> void:

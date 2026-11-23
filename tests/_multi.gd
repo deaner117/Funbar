@@ -183,6 +183,65 @@ func _run() -> void:
 	await _wait(0.8)
 	check(b.modules["fu"].chairs[0].position.distance_to(Vector3(-12.0, 0, -2.5)) < 0.05, "chairs: Bob sees the chair moved")
 
+	# Arcade: scores and games are shared.
+	var ask: Node = a.modules["sk"]
+	ask._on_start(1)
+	await _wait(0.4)
+	ask._landed(1, ask.lanes[1]["balls"][0], 50)
+	await _wait(0.5)
+	check(b.modules["sk"].lanes[1]["score"] == 50 and b.modules["sk"].lanes[1]["rolls"] == 1, "skee-ball: Bob sees 50 on lane 2")
+	a.modules["hs"]._on_start()
+	await _wait(0.3)
+	a.modules["hs"]._basket()
+	await _wait(0.5)
+	check(b.modules["hs"].score == 2 and b.modules["hs"].running, "hoops: Bob sees the basket")
+	var asg: Node = a.modules["sg"]
+	asg._on_start()
+	var ti := -1
+	for i in asg.targets.size():
+		if asg.targets[i]["node"].visible and asg.targets[i]["rail"] == 1:
+			ti = i
+			break
+	var tpos: Vector3 = asg.targets[ti]["node"].global_position + Vector3(0, 0.05, 0)
+	var blaster: Node3D = asg.blasters[0]
+	blaster.freeze = true
+	blaster.global_transform = Transform3D(Basis.looking_at(Vector3(0, 0, -1)), tpos + Vector3(0, -0.05, 2.45))
+	asg._fire(blaster, null)
+	await _wait(0.5)
+	check(asg.scores[0] == 25 and b.modules["sg"].scores[0] == 25, "gallery: a rabbit hit scores 25 for red on both")
+	check(b.modules["sg"].targets[ti]["down"] > 0.0, "gallery: the rabbit flips down for Bob")
+	var apb: Node = a.modules["pb"]
+	apb._on_start()
+	await _wait(0.6)
+	check(b.modules["pb"].player_slot == a.me() and a.controls_captured == apb, "pinball: Bob sees Alice playing; her walking pauses")
+	check(b.modules["pb"]._remote_ball.distance_to(apb._ball) < 0.01, "pinball: ball position streams to Bob")
+	apb._on_quit()
+	await _wait(0.4)
+	check(b.modules["pb"].player_slot == -1 and a.controls_captured == null, "pinball: quitting frees the machine and walking")
+	var amz: Node = a.modules["mz"]
+	amz._on_start()
+	await _wait(2.5)
+	check(b.modules["mz"].player_slot == a.me() and b.modules["mz"].me_pos.distance_to(amz.me_pos) < 0.6, "maze: Bob's screen follows Alice's game")
+	check(b.modules["mz"].seeds.size() == amz.seeds.size(), "maze: eaten seeds match (%d / %d)" % [b.modules["mz"].seeds.size(), amz.seeds.size()])
+	amz._on_quit()
+	var arc: Node = a.modules["rc"]
+	arc._on_start()
+	await _wait(0.5)
+	check(b.modules["rc"].running and b.modules["rc"].player_name == arc.player_name, "racer: Bob sees Alice driving")
+	arc._on_quit()
+	await _wait(0.4)
+	check(not b.modules["rc"].running and a.controls_captured == null, "racer: quit frees the cabinet")
+
+	# Bartender: Alice walks up to the bar and gets served; Bob sees the drink on the counter.
+	a.place_at(Vector3(-11.0, 0, -16.4), PI / 2)
+	await _wait(6.0)
+	var served := false
+	for d: Node3D in b.modules["bt"].drinks:
+		if d.visible and d.global_position.distance_to(Vector3(-12.2, 1.11, -16.4)) < 0.3:
+			served = true
+	check(served, "bartender: Alice got a drink, and Bob sees it on the bar")
+	a.place_at(Vector3(0, 0, 4.0), 0.0)
+
 	# Props: index lookups by kind.
 	var apr: Node = a.modules["pr"]
 	var bpr: Node = b.modules["pr"]

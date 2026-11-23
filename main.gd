@@ -31,6 +31,13 @@ const Jukebox := preload("res://jukebox.gd")
 const Props := preload("res://props.gd")
 const Gym := preload("res://gym.gd")
 const Furniture := preload("res://furniture.gd")
+const SkeeBall := preload("res://skeeball.gd")
+const Hoops := preload("res://hoops.gd")
+const Gallery := preload("res://gallery.gd")
+const Pinball := preload("res://pinball.gd")
+const Maze := preload("res://maze.gd")
+const Racer := preload("res://racer.gd")
+const Bartender := preload("res://bartender.gd")
 
 const DEFAULT_SERVER := "wss://hangout-mansion.usa-vs-vietnam-relay.workers.dev"
 const SETTINGS_FILE := "user://settings.cfg"
@@ -132,6 +139,7 @@ func _ready() -> void:
 		voice.start()
 	if room_code != "" and not args.has("solo"):
 		join_room(room_code)
+	_shot_only = str(args.get("only", ""))
 	if args.has("shots"):
 		_take_shots.call_deferred(str(args["shots"]))
 
@@ -328,6 +336,35 @@ func _build_games() -> void:
 	add_child(pr)
 	pr.setup(mansion.anchors)
 	modules["pr"] = pr
+	# The arcade (the ball games add their balls and blasters to the props, so after them).
+	var sk := SkeeBall.new()
+	sk.main = self
+	add_child(sk)
+	modules["sk"] = sk
+	sk.setup([mansion.anchors["skee_1"], mansion.anchors["skee_2"]])
+	var hs := Hoops.new()
+	hs.main = self
+	add_child(hs)
+	modules["hs"] = hs
+	hs.setup(mansion.anchors["hoops"])
+	var sg := Gallery.new()
+	sg.main = self
+	add_child(sg)
+	modules["sg"] = sg
+	sg.setup(mansion.anchors["gallery"])
+	for e: Array in [["pb", Pinball, "pinball"], ["mz", Maze, "maze"], ["rc", Racer, "racer"]]:
+		var m: Node3D = (e[1] as GDScript).new()
+		m.set("main", self)
+		a = mansion.anchors[e[2]]
+		m.position = a[0]
+		m.rotation.y = a[1]
+		add_child(m)
+		modules[e[0]] = m
+	var bt := Bartender.new()
+	bt.main = self
+	add_child(bt)
+	modules["bt"] = bt
+	bt.setup(mansion.anchors["bartender"])
 
 
 func _request_mic() -> void:
@@ -360,9 +397,32 @@ func _physics_process(delta: float) -> void:
 		_send_pose()
 
 
+## Read the thumbsticks (x right, y up), or arrow keys / WASD on the laptop: for arcade
+## machines that take over the sticks while you play them.
+func stick(i: int) -> Vector2:
+	if xr:
+		return hands[i].get_vector2("primary")
+	if test_mode:
+		return Vector2.ZERO
+	return Vector2(float(Input.is_physical_key_pressed(KEY_RIGHT) or Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_LEFT) or Input.is_physical_key_pressed(KEY_A)),
+		float(Input.is_physical_key_pressed(KEY_UP) or Input.is_physical_key_pressed(KEY_W)) - float(Input.is_physical_key_pressed(KEY_DOWN) or Input.is_physical_key_pressed(KEY_S)))
+
+
+## The trigger (0..1) of hand i, or space / shift on the laptop.
+func trigger(i: int) -> float:
+	if xr:
+		return hands[i].get_float("trigger")
+	if test_mode:
+		return 0.0
+	return float(Input.is_physical_key_pressed(KEY_SHIFT if i == 0 else KEY_SPACE))
+
+
 func _locomotion(delta: float) -> void:
 	var stick := Vector2.ZERO
 	var turn := 0.0
+	if controls_captured != null and is_instance_valid(controls_captured):
+		_body_snap = true
+		return
 	if xr:
 		stick = hands[0].get_vector2("primary")
 		turn = hands[1].get_vector2("primary").x
@@ -516,6 +576,9 @@ func _process(delta: float) -> void:
 
 
 var _stats_in := 2.0
+## An arcade machine playing with the sticks: walking and turning pause until it lets go.
+var controls_captured: Node = null
+var _shot_only := ""
 
 
 # ---------------------------------------------------------------- grabbing
@@ -789,12 +852,37 @@ func _take_shots(dir: String) -> void:
 		["art_lounge", Vector3(-9.6, 0, 0.0), -PI / 2, 0.08],
 		["jukebox", Vector3(-11.0, 0, 5.1), PI, -0.25],
 		["jukebox_far", Vector3(-11.5, 0, 3.3), PI - 0.15, -0.1],
+		["arcade_wide", Vector3(0, 0, -8.0), 0.0, -0.08],
+		["arcade_back", Vector3(0, 0, -25.5), PI, -0.08],
+		["cabinets", Vector3(-1.0, 0, -23.4), 0.0, -0.15],
+		["pinball", Vector3(-1.6, 0, -25.05), 0.0, -0.75],
+		["maze", Vector3(-4.6, 0, -25.25), 0.0, -0.2],
+		["racer", Vector3(2.4, 0, -24.1), 0.0, -0.2],
+		["gallery", Vector3(9.4, 0, -16.6), 0.0, -0.1],
+		["skee", Vector3(7.7, 0, -14.45), -PI / 2, -0.35],
+		["hoops", Vector3(7.4, 0, -10.2), -PI / 2, 0.05],
+		["bar", Vector3(-9.0, 0, -17.0), PI / 2, -0.12],
+		["bartender", Vector3(-11.0, 0, -17.0), PI / 2, -0.05],
+		["bartender_serve", Vector3(-11.2, 0, -15.5), PI / 2 + 0.35, -0.2],
 		["hands", Vector3(0, 0, 4.0), 0.0, 0.0],
 		["menu", Vector3(0, 0, 4.0), 0.0, 0.0],
 	]
 	var hand_demo: Array[Node3D] = []
 	for v: Array in views:
 		var shot: String = v[0]
+		if _shot_only != "" and not shot in _shot_only.split(","):
+			continue
+		if shot == "bartender_serve":
+			place_at(v[1], v[2])
+			for i in 150:
+				await get_tree().process_frame
+		if shot == "cabinets":
+			# Start the arcade games so their screens show play.
+			for k: String in ["pb", "mz", "rc"]:
+				modules[k]._on_start()
+			controls_captured = null
+			for i in 90:
+				await get_tree().process_frame
 		camera.rotation.x = 0.0
 		place_at(v[1], v[2])
 		_pitch = v[3]
