@@ -280,6 +280,99 @@ static func tube_mesh(paths: Array, radius: float, sides := 5) -> ArrayMesh:
 	return st.commit()
 
 
+## A solid of revolution round +y: `profile` is (radius, y) points from one end to the other
+## (start and finish on the axis for a closed shape). Vases, bottles, turned legs, knobs.
+static func lathe_mesh(profile: PackedVector2Array, sides := 24) -> ArrayMesh:
+	var key := "lathe|%s|%d" % [profile, sides]
+	if _meshes.has(key):
+		return _meshes[key]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Which way round the outline goes decides which side is "outside".
+	var area := 0.0
+	for k in profile.size() - 1:
+		area += profile[k].x * profile[k + 1].y - profile[k + 1].x * profile[k].y
+	var flip := 1.0 if area < 0.0 else -1.0
+	# Segment normals, then smooth ones at each point unless the profile turns a sharp corner.
+	var seg_n: Array[Vector2] = []
+	for k in profile.size() - 1:
+		var d := (profile[k + 1] - profile[k]).normalized()
+		seg_n.append(Vector2(-d.y, d.x) * flip)
+	for k in profile.size() - 1:
+		var a := profile[k]
+		var b := profile[k + 1]
+		if a.distance_to(b) < 0.00001:
+			continue
+		var na := seg_n[k]
+		var nb := seg_n[k]
+		if k > 0 and seg_n[k - 1].dot(na) > 0.6:
+			na = (seg_n[k - 1] + na).normalized()
+		if k < seg_n.size() - 1 and seg_n[k + 1].dot(nb) > 0.6:
+			nb = (seg_n[k + 1] + nb).normalized()
+		for s in sides:
+			var a0 := TAU * s / sides
+			var a1 := TAU * (s + 1) / sides
+			var c0 := Vector3(cos(a0), 0, sin(a0))
+			var c1 := Vector3(cos(a1), 0, sin(a1))
+			var pts: Array[Vector3] = [c0 * a.x + Vector3(0, a.y, 0), c0 * b.x + Vector3(0, b.y, 0),
+				c1 * b.x + Vector3(0, b.y, 0), c1 * a.x + Vector3(0, a.y, 0)]
+			var nrm: Array[Vector3] = [(c0 * na.x + Vector3(0, na.y, 0)).normalized(), (c0 * nb.x + Vector3(0, nb.y, 0)).normalized(),
+				(c1 * nb.x + Vector3(0, nb.y, 0)).normalized(), (c1 * na.x + Vector3(0, na.y, 0)).normalized()]
+			if a.x > 0.00001 or b.x > 0.00001:
+				if b.x > 0.00001:
+					_tri(st, pts, nrm, 0, 1, 2)
+				if a.x > 0.00001:
+					_tri(st, pts, nrm, 0, 2, 3)
+	var mesh := st.commit()
+	_meshes[key] = mesh
+	return mesh
+
+
+static func add_lathe(parent: Node, profile: PackedVector2Array, pos: Vector3, m: Material, sides := 24, rot := Vector3.ZERO) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = lathe_mesh(profile, sides)
+	mi.material_override = m
+	mi.layers = vis_layers
+	mi.position = pos
+	mi.rotation = rot
+	parent.add_child(mi)
+	return mi
+
+
+## A flat plate (in the xy plane, `thick` deep in z) of cols x rows square cells, each with a
+## round hole through it: the Connect Four grid. Centred on the origin.
+static func holed_panel_mesh(cols: int, rows: int, cell: float, hole_r: float, thick: float, sides := 24) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var half := cell / 2.0
+	for r in rows:
+		for c in cols:
+			var ctr := Vector2((c - (cols - 1) / 2.0) * cell, (r - (rows - 1) / 2.0) * cell)
+			for s in sides:
+				var a0 := TAU * s / sides
+				var a1 := TAU * (s + 1) / sides
+				var d0 := Vector2(cos(a0), sin(a0))
+				var d1 := Vector2(cos(a1), sin(a1))
+				var h0 := ctr + d0 * hole_r
+				var h1 := ctr + d1 * hole_r
+				var b0 := ctr + d0 * (half / maxf(absf(d0.x), absf(d0.y)))
+				var b1 := ctr + d1 * (half / maxf(absf(d1.x), absf(d1.y)))
+				for face: float in [1.0, -1.0]:
+					var z := face * thick / 2.0
+					var pts: Array[Vector3] = [Vector3(h0.x, h0.y, z), Vector3(b0.x, b0.y, z), Vector3(b1.x, b1.y, z), Vector3(h1.x, h1.y, z)]
+					var n := Vector3(0, 0, face)
+					var nrm: Array[Vector3] = [n, n, n, n]
+					_tri(st, pts, nrm, 0, 1, 2)
+					_tri(st, pts, nrm, 0, 2, 3)
+				# The wall of the hole, facing its centre.
+				var w: Array[Vector3] = [Vector3(h0.x, h0.y, thick / 2.0), Vector3(h0.x, h0.y, -thick / 2.0),
+					Vector3(h1.x, h1.y, -thick / 2.0), Vector3(h1.x, h1.y, thick / 2.0)]
+				var wn: Array[Vector3] = [Vector3(-d0.x, -d0.y, 0), Vector3(-d0.x, -d0.y, 0), Vector3(-d1.x, -d1.y, 0), Vector3(-d1.x, -d1.y, 0)]
+				_tri(st, w, wn, 0, 1, 2)
+				_tri(st, w, wn, 0, 2, 3)
+	return st.commit()
+
+
 ## Points of a hanging wire between a and b, sagging `sag` metres in the middle.
 static func catenary(a: Vector3, b: Vector3, sag: float, count: int) -> PackedVector3Array:
 	var out := PackedVector3Array()

@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dfgmv7w3vwpqe"
+path="res://.godot/imported/Night on the Docks - Sax.mp3-d44ae310d8a8b835b2745b53f4d0d88a.mp3str"
+
+[deps]
+
+source_file="res://music/Night on the Docks - Sax.mp3"
+dest_files=["res://.godot/imported/Night on the Docks - Sax.mp3-d44ae310d8a8b835b2745b53f4d0d88a.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

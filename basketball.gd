@@ -258,6 +258,14 @@ func _physics_process(delta: float) -> void:
 	_net_mesh.scale = Vector3(1.0, 1.0 + 0.25 * sin(_swish * 30.0) * _swish, 1.0)
 
 
+## Gravity for the balls as a fraction of Earth's (set by the gym's gravity panel).
+func set_gravity(k: float) -> void:
+	for b in balls:
+		b.gravity_scale = k
+		b.linear_damp = 0.05 if k > 0.05 else 0.25   # in "space" they drift to a stop
+		b.sleeping = false
+
+
 func _put_on_rack(b: Ball) -> void:
 	b.global_transform = Transform3D(Basis.IDENTITY, rack_spots[b.index])
 	b.linear_velocity = Vector3.ZERO

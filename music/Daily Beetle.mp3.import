@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://d2euyjfgql58g"
+path="res://.godot/imported/Daily Beetle.mp3-9e2e8460c6e5c910b9f985e37a2d218e.mp3str"
+
+[deps]
+
+source_file="res://music/Daily Beetle.mp3"
+dest_files=["res://.godot/imported/Daily Beetle.mp3-9e2e8460c6e5c910b9f985e37a2d218e.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

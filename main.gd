@@ -29,6 +29,8 @@ const ConnectFour := preload("res://connect_four.gd")
 const Basketball := preload("res://basketball.gd")
 const Jukebox := preload("res://jukebox.gd")
 const Props := preload("res://props.gd")
+const Gym := preload("res://gym.gd")
+const Furniture := preload("res://furniture.gd")
 
 const DEFAULT_SERVER := "wss://hangout-mansion.usa-vs-vietnam-relay.workers.dev"
 const SETTINGS_FILE := "user://settings.cfg"
@@ -302,6 +304,11 @@ func _build_games() -> void:
 	add_child(bb)
 	bb.setup(mansion.anchors["hoop"], mansion.anchors["ball_rack"])
 	modules["bb"] = bb
+	var gy := Gym.new()
+	gy.main = self
+	add_child(gy)
+	modules["gy"] = gy
+	gy.setup(mansion.anchors["scoreboard"], mansion.anchors["scorer_table"], mansion.anchors["gravity_panel"])
 	a = mansion.anchors["jukebox"]
 	var jb := Jukebox.new()
 	jb.main = self
@@ -311,6 +318,11 @@ func _build_games() -> void:
 	modules["jb"] = jb
 	for k: String in ["speaker_l", "speaker_r"]:
 		jb.add_speaker(mansion.anchors[k][0], mansion.anchors[k][1])
+	var fu := Furniture.new()
+	fu.main = self
+	add_child(fu)
+	fu.setup(mansion.chairs)
+	modules["fu"] = fu
 	var pr := Props.new()
 	pr.main = self
 	add_child(pr)
@@ -768,6 +780,15 @@ func _take_shots(dir: String) -> void:
 		["fireplace", Vector3(-17.5, 0, 0.8), PI / 2 + 0.2, -0.3],
 		["lawn", Vector3(-1.0, 0, 22.0), PI, -0.15],
 		["cake", Vector3(0, 0, 0.6), 0.0, -0.75],
+		["scoreboard", Vector3(13.0, 0, -1.2), 0.15, 0.2],
+		["gravity", Vector3(12.0, 0, 4.9), PI, -0.15],
+		["art_snakes", Vector3(-3.8, 0, -4.4), 0.0, 0.1],
+		["art_west", Vector3(-4.0, 0, 0.0), PI / 2, 0.05],
+		["art_east", Vector3(4.0, 0, 0.0), -PI / 2, 0.05],
+		["card_table", Vector3(-11.5, 0, -1.9), 0.0, -0.45],
+		["art_lounge", Vector3(-9.6, 0, 0.0), -PI / 2, 0.08],
+		["jukebox", Vector3(-11.0, 0, 5.1), PI, -0.25],
+		["jukebox_far", Vector3(-11.5, 0, 3.3), PI - 0.15, -0.1],
 		["hands", Vector3(0, 0, 4.0), 0.0, 0.0],
 		["menu", Vector3(0, 0, 4.0), 0.0, 0.0],
 	]

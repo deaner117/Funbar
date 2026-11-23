@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://bv5ogwages3lm"
+path="res://.godot/imported/Funky Chunk.mp3-35f7d404233e5188411830db2bafc6b4.mp3str"
+
+[deps]
+
+source_file="res://music/Funky Chunk.mp3"
+dest_files=["res://.godot/imported/Funky Chunk.mp3-35f7d404233e5188411830db2bafc6b4.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

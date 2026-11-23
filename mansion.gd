@@ -19,6 +19,7 @@ extends Node3D
 
 const Kit := preload("res://kit.gd")
 const Fire := preload("res://fire.gd")
+const Illusions := preload("res://illusions.gd")
 
 const NAME := "SAM AND DEAN WORLDWIDE"
 const WALL_T := 0.2
@@ -67,7 +68,10 @@ var anchors := {
 	"connect_four": [Vector3(4.6, 0, -13.0), -PI / 2],
 	"hoop": [Vector3(20.75, 0, 0), -PI / 2],
 	"ball_rack": [Vector3(15.5, 0, 5.2), PI],
-	"jukebox": [Vector3(-11.0, 0, 6.55), PI],
+	"scoreboard": [Vector3(14.0, 3.45, -6.8), 0.0],
+	"scorer_table": [Vector3(11.6, 0, -3.9), 0.0],
+	"gravity_panel": [Vector3(12.0, 0, 6.8), PI],
+	"jukebox": [Vector3(-11.0, 0, 6.42), PI],
 	"cake": [Vector3(0, 0.425, -0.6), 0.3],
 	"bbq": [Vector3(0.0, 0, 19.55), PI],
 	"cooler": [Vector3(-1.35, 0, 20.25), PI],
@@ -89,6 +93,8 @@ var rooms := {
 	"Lawn": Rect2(-14, 21, 28, 16),
 }
 var structure: Array[Node3D] = []
+## Movable chairs for furniture.gd: [position, yaw, wood Material, seat Material].
+var chairs: Array = []
 var _floats: Array[Node3D] = []
 var _t := 0.0
 
@@ -331,15 +337,50 @@ func _plant(pos: Vector3, size_k := 1.0) -> void:
 	add_child(sm)
 
 
-## A framed painting hung on a wall, facing along +z turned by yaw.
-func _painting(pos: Vector3, yaw: float, size: Vector2, a: Color, b: Color) -> void:
+## A framed optical-illusion artwork (Illusions.INFO[kind]) hung on a wall, facing along +z
+## turned by yaw: a moulded gold frame with a linen liner, a brass picture light above and a
+## brass plaque with the title underneath.
+func _painting(pos: Vector3, yaw: float, size: Vector2, kind: int, plaque := true) -> void:
 	var p := _pivot(pos, yaw)
-	var gold := Kit.mat(Color(0.75, 0.6, 0.2), 0.35, 0.8)
-	Kit.add_rbox(p, Vector3(size.x + 0.16, size.y + 0.16, 0.05), Vector3.ZERO, gold, 0.02)
-	Kit.add_box(p, Vector3(size.x + 0.04, size.y + 0.04, 0.02), Vector3(0, 0, 0.022), Kit.mat(Color(0.95, 0.93, 0.88)))
-	Kit.add_box(p, Vector3(size.x, size.y, 0.02), Vector3(0, 0, 0.026), Kit.tmat(a, "fabric", 8.0, 0.9))
-	Kit.add_box(p, Vector3(size.x * 0.45, size.y * 0.5, 0.01), Vector3(size.x * 0.12, -size.y * 0.1, 0.04), Kit.tmat(b, "fabric", 8.0, 0.9))
-	Kit.add_sphere(p, size.y * 0.16, Vector3(-size.x * 0.22, size.y * 0.2, 0.035), Kit.mat(b.lightened(0.3), 0.9), 0, 12)
+	var gold := Kit.mat(Color(0.86, 0.66, 0.26), 0.32, 0.45)
+	var gold_dark := Kit.mat(Color(0.6, 0.43, 0.15), 0.4, 0.4)
+	var fw := 0.11
+	# Frame: four mitred-looking rails (outer bead, cove, inner lip) round a linen liner.
+	for side in 4:
+		var horiz := side < 2
+		var sgn := 1.0 if side % 2 == 0 else -1.0
+		var length := size.x + fw * 2.0 if horiz else size.y
+		var off := (size.y / 2.0 + fw / 2.0) * sgn if horiz else (size.x / 2.0 + fw / 2.0) * sgn
+		var at := Vector3(0, off, 0) if horiz else Vector3(off, 0, 0)
+		var dims := Vector3(length, fw, 0.06) if horiz else Vector3(fw, length, 0.06)
+		Kit.add_rbox(p, dims, at + Vector3(0, 0, 0.03), gold, 0.025)
+		var bead := Vector3(length, 0.022, 0.02) if horiz else Vector3(0.022, length, 0.02)
+		var bead_at := at + (Vector3(0, -sgn * fw * 0.32, 0.065) if horiz else Vector3(-sgn * fw * 0.32, 0, 0.065))
+		Kit.add_rbox(p, bead, bead_at, gold_dark, 0.008)
+	Kit.add_box(p, Vector3(size.x + 0.02, size.y + 0.02, 0.02), Vector3(0, 0, 0.012), Kit.tmat(Color(0.9, 0.87, 0.8), "fabric", 10.0, 0.95))
+	var canvas := MeshInstance3D.new()
+	var qm := QuadMesh.new()
+	qm.size = size - Vector2(0.08, 0.08)
+	canvas.mesh = qm
+	canvas.material_override = Illusions.material(kind, qm.size.x / qm.size.y)
+	canvas.position = Vector3(0, 0, 0.024)
+	canvas.layers = Kit.vis_layers
+	p.add_child(canvas)
+	# Picture light: a brass arm and a hood with a warm glowing strip.
+	var brass := Kit.mat(Color(0.7, 0.55, 0.28), 0.25, 0.9)
+	Kit.add_box(p, Vector3(0.05, 0.05, 0.04), Vector3(0, size.y / 2.0 + fw + 0.06, 0.02), brass)
+	Kit.add_cylinder(p, 0.008, 0.16, Vector3(0, size.y / 2.0 + fw + 0.07, 0.1), brass, 0, -1.0, 6, Vector3(PI / 2 - 0.4, 0, 0))
+	var hood_w := minf(size.x * 0.55, 0.9)
+	Kit.add_cylinder(p, 0.035, hood_w, Vector3(0, size.y / 2.0 + fw + 0.03, 0.18), brass, 0, -1.0, 12, Vector3(0, 0, PI / 2))
+	Kit.add_box(p, Vector3(hood_w - 0.02, 0.012, 0.03), Vector3(0, size.y / 2.0 + fw + 0.0, 0.18), Kit.mat(Color(1.0, 0.9, 0.7), 0.5, 0.0, 3.0))
+	if plaque:
+		var info: Array = Illusions.INFO[kind]
+		var py := -size.y / 2.0 - fw - 0.13
+		Kit.add_rbox(p, Vector3(0.62, 0.13, 0.015), Vector3(0, py, 0.008), Kit.mat(Color(0.82, 0.68, 0.38), 0.35, 0.15), 0.006)
+		Kit.add_label(p, info[0], 0.034, Vector3(0, py + 0.025, 0.017), 0.0, Color(0.12, 0.08, 0.03))
+		var cap := Kit.add_label(p, info[1], 0.019, Vector3(0, py - 0.028, 0.017), 0.0, Color(0.15, 0.1, 0.05))
+		cap.width = 0.58 / cap.pixel_size
+		cap.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 
 ## A glowing window (it shows daylight; you can't see through it).
@@ -461,10 +502,13 @@ func _grand_hall() -> void:
 	# Plants, paintings and windows.
 	for p: Vector3 in [Vector3(-6.2, 0, -6.2), Vector3(6.2, 0, -6.2), Vector3(-6.2, 0, 6.2), Vector3(6.2, 0, 6.2)]:
 		_plant(p, 1.2)
-	_painting(Vector3(-3.8, 2.6, -6.77), 0.0, Vector2(1.6, 1.1), Color("21405e"), Color("e9a23b"))
-	_painting(Vector3(3.8, 2.6, -6.77), 0.0, Vector2(1.6, 1.1), Color("5a2340"), Color("63c6b5"))
-	_painting(Vector3(-6.77, 2.6, -3.8), PI / 2, Vector2(1.4, 1.0), Color("2f5d3a"), Color("f2d17c"))
-	_painting(Vector3(6.77, 2.6, 3.8), -PI / 2, Vector2(1.4, 1.0), Color("4a3b6b"), Color("f08a5d"))
+	# Six optical-illusion artworks, each one different.
+	_painting(Vector3(-3.8, 2.5, -6.77), 0.0, Vector2(2.1, 1.5), 0)
+	_painting(Vector3(3.8, 2.5, -6.77), 0.0, Vector2(1.6, 1.6), 3)
+	_painting(Vector3(-6.77, 2.5, -3.8), PI / 2, Vector2(2.0, 1.4), 1)
+	_painting(Vector3(-6.77, 2.5, 3.8), PI / 2, Vector2(1.5, 1.5), 8)
+	_painting(Vector3(6.77, 2.5, -3.8), -PI / 2, Vector2(1.6, 1.6), 6)
+	_painting(Vector3(6.77, 2.5, 3.8), -PI / 2, Vector2(2.0, 1.4), 2)
 	_window(Vector3(-3.8, 2.6, 6.77), PI, Vector2(1.6, 2.2), Color(1.0, 0.82, 0.62))
 	_window(Vector3(3.8, 2.6, 6.77), PI, Vector2(1.6, 2.2), Color(1.0, 0.82, 0.62))
 	# Signs over the doorways, and the name.
@@ -607,7 +651,10 @@ func _lounge() -> void:
 	var fire := Fire.new(0.75, 2.0, false)
 	fire.position = Vector3(face_x - 0.3, 0.04, 0)
 	add_child(fire)
-	_painting(Vector3(-20.77, 3.3, 0), PI / 2, Vector2(1.6, 0.8), Color("1c2b3a"), Color("d9822b"))
+	_painting(Vector3(-20.77, 3.3, 0), PI / 2, Vector2(1.2, 0.8), 13, false)
+	_painting(Vector3(-18.6, 2.35, 6.77), PI, Vector2(1.5, 1.1), 9)
+	_painting(Vector3(-7.23, 2.35, -4.0), -PI / 2, Vector2(1.3, 1.3), 7)
+	_painting(Vector3(-7.23, 2.35, 4.0), -PI / 2, Vector2(1.6, 1.1), 4)
 	# Seating round a rug facing the fire.
 	Kit.add_rbox(self, Vector3(4.2, 0.014, 4.6), Vector3(-17.4, 0.007, 0), Kit.tmat(Color("2d4b3e"), "carpet", 3.0, 1.0), 0.006)
 	Kit.add_box(self, Vector3(3.8, 0.016, 4.2), Vector3(-17.4, 0.008, 0), Kit.tmat(Color("3b6150"), "carpet", 3.0, 1.0))
@@ -635,9 +682,10 @@ func _lounge() -> void:
 	# Card table with chairs, lamps, plants.
 	var table_pos := Vector3(-11.5, 0, -4.0)
 	_table(table_pos, Vector3(1.2, 0.75, 1.2), Kit.tmat(Color("1f5a3a"), "fabric", 6.0, 0.95), shelf)
+	# Its chairs can be pulled out and moved (furniture.gd builds them).
 	for a: float in [0.0, PI / 2, PI, -PI / 2]:
 		var out := Vector3(sin(a), 0, cos(a))
-		_chair(table_pos + out * 0.85, a + PI, shelf, _fabric(Color("6b2a30")))
+		chairs.append([table_pos + out * 0.62, a + PI, shelf, _fabric(Color("6b2a30"))])
 	_floor_lamp(Vector3(-14.0, 0, -2.6))
 	_floor_lamp(Vector3(-14.0, 0, 2.6))
 	_plant(Vector3(-20.3, 0, -6.2))
